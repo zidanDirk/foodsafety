@@ -97,3 +97,4 @@ foodsafety/
 - **Styling**: Uses Tailwind CSS for utility-first styling and SCSS for custom styles
 - **Type Safety**: Uses TypeScript for type checking
 - **Fast Development**: Uses Vite for fast development and building
+# foodsafety
