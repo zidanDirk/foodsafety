@@ -1,1 +1,34 @@
 /* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap');
+
+body {
+  font-family: 'Comic Neue', cursive, system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* 图片预览样式 */
+.img-preview {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 图片放大样式 */
+.img-expanded {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.img-expanded img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}

@@ -40,3 +40,9 @@ pnpm run build
 - `src/` - 客户端组件和状态管理
 - `public/` - 静态资源
 - `config/` - 配置文件
+
+
+## model name
+
+- gemini-2.5-flash
+- deepseek-v3-0324

@@ -4,18 +4,20 @@ import Button from '../src/components/Button';
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2">
-      <h1 className="text-4xl font-bold mb-8">食品安全管理系统</h1>
-      <div className="flex flex-col items-center space-y-4">
-        <p className="text-xl">欢迎使用食品安全管理系统</p>
-      <div className="flex space-x-4">
-        <Button variant="primary" href="/upload">
-          图片上传
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-16rem)] py-8 px-4">
+      <h1 className="text-5xl font-bold text-primary mb-6 text-center leading-tight">
+        欢迎来到 🍏 食品安全检测系统
+      </h1>
+      <p className="text-xl text-text mb-8 text-center max-w-prose">
+        我们致力于让您的食品更安全，通过智能图片识别技术，快速检测食品中的潜在风险。
+      </p>
+      <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
+        <Button variant="primary" href="/upload" className="w-full sm:w-auto">
+          📸 图片上传
         </Button>
-        <Button variant="primary">
-          开始使用
+        <Button variant="secondary" href="/about" className="w-full sm:w-auto">
+          📖 了解更多
         </Button>
-      </div>
       </div>
     </div>
   );

@@ -3,10 +3,13 @@
 import { useState, useRef, ChangeEvent } from 'react';
 import { compressImage } from '@/src/lib/image-utils';
 import { toast } from 'react-hot-toast';
+import Button from '../../src/components/Button'; // 导入Button组件
 
 export default function UploadPage() {
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [ocrResult, setOcrResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -64,8 +67,12 @@ export default function UploadPage() {
       }
 
       const result = await response.json();
-      toast.success('上传成功');
-      console.log('Base64结果:', result.base64);
+      if (result.success) {
+        toast.success('识别成功');
+        setOcrResult(JSON.stringify(result.ocrResult, null, 2));
+      } else {
+        toast.error(`识别失败: ${result.error || '未知错误'}`);
+      }
     } catch (error) {
       toast.error('上传失败');
       console.error(error);
@@ -75,48 +82,80 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">食品安全图片上传</h1>
+    <div className="min-h-[calc(100vh-16rem)] py-8 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+      <div className="max-w-md w-full mx-auto bg-white rounded-3xl shadow-xl overflow-hidden p-8 border-4 border-accent">
+        <h1 className="text-3xl font-bold text-primary mb-6 text-center">📸 食品图片上传</h1>
         
         <div className="space-y-6">
-          <div 
-            className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 transition"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImageChange}
-              accept="image/jpeg,image/png"
-              className="hidden"
-            />
+            <div 
+              className="border-4 border-dashed border-secondary rounded-2xl p-8 text-center hover:border-primary transition-all duration-200 ease-in-out transform hover:scale-105"
+            >
             {image ? (
-              <img 
-                src={image} 
-                alt="预览" 
-                className="mx-auto max-h-64 object-contain"
-              />
+              <div className="relative">
+                <img 
+                  src={image} 
+                  alt="预览" 
+                  className="img-preview mx-auto max-h-64 object-contain rounded-lg shadow-md cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsExpanded(!isExpanded);
+                  }}
+                />
+                {isExpanded && (
+                  <div 
+                    className="img-expanded"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExpanded(false);
+                    }}
+                  >
+                    <img 
+                      src={image} 
+                      alt="放大预览" 
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                )}
+              </div>
             ) : (
-              <div className="space-y-2">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-sm text-gray-600">
-                  <span className="font-medium text-blue-600">点击上传</span> 或拖放图片
-                </p>
-                <p className="text-xs text-gray-500">支持JPEG/PNG格式，最大8MB</p>
+              <div className="space-y-4">
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="secondary"
+                  className="w-full py-8"
+                >
+                  <div className="space-y-2">
+                    <span className="text-4xl block">🖼️</span>
+                    <p className="text-lg font-semibold">选择文件</p>
+                    <p className="text-sm text-gray-500">支持JPEG/PNG格式，最大8MB</p>
+                  </div>
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageChange}
+                  accept="image/jpeg,image/png"
+                  className="hidden"
+                />
               </div>
             )}
           </div>
 
-          <button
+          <Button
             onClick={handleUpload}
             disabled={!image || isLoading}
-            className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${(!image || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            variant="primary"
+            className="w-full"
           >
-            {isLoading ? '处理中...' : '上传图片'}
-          </button>
+            {isLoading ? '🚀 处理中...' : '✨ 上传图片'}
+          </Button>
+
+          {ocrResult && (
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h3 className="font-bold text-lg mb-2">识别结果：</h3>
+              <div className="whitespace-pre-wrap">{ocrResult}</div>
+            </div>
+          )}
         </div>
       </div>
     </div>
