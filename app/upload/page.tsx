@@ -4,8 +4,9 @@ import { useState, useRef, ChangeEvent } from 'react';
 import { compressImage } from '@/src/lib/image-utils';
 import { toast } from 'react-hot-toast';
 import Button from '../../src/components/Button'; // 导入Button组件
+import { ingredientItem } from '@/src/types/ingredients';
 
-type IngredientResult = string[];
+type IngredientResult = ingredientItem[];
 
 export default function UploadPage() {
   const [image, setImage] = useState<string | null>(null);
@@ -158,7 +159,11 @@ export default function UploadPage() {
               {ingredients ? (
                 <ul className="list-disc pl-5 space-y-1">
                   {ingredients.map((item, index) => (
-                    <li key={index}>{item}</li>
+                    <li key={index}>
+                      <p>{item.name}:{item.description}</p>
+                      <p>是否健康:{item.is_healthy}</p>
+                      <p>健康原因:{item.health_reason}</p>
+                    </li>
                   ))}
                 </ul>
               ) : (

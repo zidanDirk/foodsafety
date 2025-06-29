@@ -1,7 +1,5 @@
 {
-  "/about/page": "app/about/page.js",
-  "/_not-found/page": "app/_not-found/page.js",
-  "/page": "app/page.js",
   "/api/upload/route": "app/api/upload/route.js",
-  "/upload/page": "app/upload/page.js"
+  "/upload/page": "app/upload/page.js",
+  "/_not-found/page": "app/_not-found/page.js"
 }

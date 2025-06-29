@@ -46,11 +46,17 @@ export async function POST(request: Request) {
     
     // 调用LLM服务分析配料
     try {
+      const ocrRes = ocrData.words_result?.map(item => item.words).join('\n') || ''
+      if(!ocrRes) return NextResponse.json(
+        { error: '无法识别图片中的文字' },
+        { status: 500 }
+      )
       const llmService = LLMService.getInstance();
-      const ingredientsText = await llmService.analyzeIngredients(
-        ocrData.words_result?.map(item => item.words).join('\n') || ''
+      const ingredients = await llmService.analyzeIngredients(
+        ocrRes
       );
-      const ingredients = ingredientsText.split('｜');
+
+      console.log(111, ingredients)
 
       return NextResponse.json({
         success: true,
