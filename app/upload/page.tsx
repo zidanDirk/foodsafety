@@ -5,11 +5,13 @@ import { compressImage } from '@/src/lib/image-utils';
 import { toast } from 'react-hot-toast';
 import Button from '../../src/components/Button'; // 导入Button组件
 
+type IngredientResult = string[];
+
 export default function UploadPage() {
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [ocrResult, setOcrResult] = useState<string | null>(null);
+  const [ingredients, setIngredients] = useState<IngredientResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -69,7 +71,7 @@ export default function UploadPage() {
       const result = await response.json();
       if (result.success) {
         toast.success('识别成功');
-        setOcrResult(JSON.stringify(result.ocrResult, null, 2));
+        setIngredients(result.ingredients);
       } else {
         toast.error(`识别失败: ${result.error || '未知错误'}`);
       }
@@ -149,11 +151,19 @@ export default function UploadPage() {
           >
             {isLoading ? '🚀 处理中...' : '✨ 上传图片'}
           </Button>
-
-          {ocrResult && (
+              
+          {ingredients && (
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-              <h3 className="font-bold text-lg mb-2">识别结果：</h3>
-              <div className="whitespace-pre-wrap">{ocrResult}</div>
+              <h3 className="font-bold text-lg mb-2">配料成分：</h3>
+              {ingredients ? (
+                <ul className="list-disc pl-5 space-y-1">
+                  {ingredients.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>未识别到有效配料</p>
+              )}
             </div>
           )}
         </div>

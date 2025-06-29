@@ -17,6 +17,7 @@
     "axios": "^1.10.0",
     "browser-image-compression": "^2.0.2",
     "next": "^14.0.0",
+    "openai": "^5.8.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hot-toast": "^2.5.2",

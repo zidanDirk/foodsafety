@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { POST as ocrPost } from '@/app/api/ocr/route';
+import { OCRService } from '@/lib/ocr-service';
+import { LLMService } from '@/lib/llm-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,26 +38,33 @@ export async function POST(request: Request) {
     // 保存文件
     await fs.writeFile(filePath, base64Data, 'base64');
 
-
-    // 调用OCR接口识别图片
-    const ocrRequest = new Request(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000'}/api/ocr`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ image: base64Data })
-    });
+    // 直接调用OCR服务识别图片
+    const ocrText = await OCRService.getInstance().recognize(base64Data);
+    const ocrData = {
+      words_result: ocrText.split('\n').map(text => ({ words: text }))
+    };
     
-    const ocrResponse = await ocrPost(ocrRequest);
-    const ocrData = await ocrResponse.json();
+    // 调用LLM服务分析配料
+    try {
+      const llmService = LLMService.getInstance();
+      const ingredientsText = await llmService.analyzeIngredients(
+        ocrData.words_result?.map(item => item.words).join('\n') || ''
+      );
+      const ingredients = ingredientsText.split('｜');
 
-    return NextResponse.json({
-      success: true,
-      base64: base64Data,
-      tempPath: `/temp/${fileName}`,
-      ocrResult: ocrData
-    });
-
+      return NextResponse.json({
+        success: true,
+        base64: base64Data,
+        tempPath: `/temp/${fileName}`,
+        ingredients
+      });
+    } catch (error) {
+      console.error('LLM分析错误:', error);
+      return NextResponse.json(
+        { error: '配料分析失败' },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error('上传错误:', error);
     return NextResponse.json(
