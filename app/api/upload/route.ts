@@ -27,9 +27,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // 创建临时目录
-    console.log(`pwd`, path.join(process.cwd()));
-    const tempDir = path.join(process.cwd(), 'temp');
+    // 在Netlify环境下使用/tmp目录
+    const tempDir = process.env.NETLIFY ? '/tmp' : path.join(process.cwd(), 'temp');
     await fs.mkdir(tempDir, { recursive: true });
 
     // 生成唯一文件名
@@ -62,7 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         base64: base64Data,
-        tempPath: `/temp/${fileName}`,
+        tempPath: process.env.NETLIFY ? fileName : `/temp/${fileName}`,
         ingredients
       });
     } catch (error) {
