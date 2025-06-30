@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     }
 
     // 在Netlify环境下使用/tmp目录
-    const tempDir = process.env.NETLIFY ? '/tmp' : path.join(process.cwd(), 'temp');
+    console.log(`process.env.NETLIFY_ENV`, process.env.NETLIFY_ENV)
+    const tempDir = process.env.NETLIFY_ENV ? '/tmp' : path.join(process.cwd(), 'temp');
     await fs.mkdir(tempDir, { recursive: true });
 
     // 生成唯一文件名
