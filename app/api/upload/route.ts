@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
     // 在Netlify环境下使用/tmp目录
     console.log('检查Netlify环境变量:', process.env.NETLIFY, process.env.NETLIFY_ENV);
-    const tempDir = process.env.NETLIFY ? '/tmp' : path.join(process.cwd(), 'temp');
+    const tempDir = process.env.NETLIFY_ENV ? '/tmp' : path.join(process.cwd(), 'temp');
     console.log('临时目录路径:', tempDir);
     await fs.mkdir(tempDir, { recursive: true });
     console.log('目录创建成功:', tempDir);
@@ -55,16 +55,25 @@ export async function POST(request: Request) {
     
     // 调用LLM服务分析配料
     try {
+      console.log('开始处理OCR结果...');
       const ocrRes = ocrData.words_result?.map(item => item.words).join('\n') || ''
-      if(!ocrRes) return NextResponse.json(
-        { error: '无法识别图片中的文字' },
-        { status: 500 }
-      )
-      const llmService = LLMService.getInstance();
-      const ingredients = await llmService.analyzeIngredients(
-        ocrRes
-      );
+      console.log('OCR处理结果:', ocrRes || '空内容');
+      
+      if(!ocrRes) {
+        console.log('错误: 无法识别图片中的文字');
+        return NextResponse.json(
+          { error: '无法识别图片中的文字' },
+          { status: 500 }
+        )
+      }
 
+      console.log('初始化LLM服务...');
+      const llmService = LLMService.getInstance();
+      console.log('开始分析配料...');
+      const ingredients = await llmService.analyzeIngredients(ocrRes);
+      console.log('配料分析结果:', ingredients);
+
+      console.log('准备返回成功响应');
       return NextResponse.json({
         success: true,
         base64: base64Data,
