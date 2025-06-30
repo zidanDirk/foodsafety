@@ -60,6 +60,7 @@ export class LLMService {
   }
 
   public async analyzeIngredients(text: string): Promise<Array<ingredientItem>> {
+    console.log(`start analyzeIngredients ...`)
     const response = await this.chatCompletion({
       model: this.model,
       messages: [
