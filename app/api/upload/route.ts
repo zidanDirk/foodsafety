@@ -28,22 +28,30 @@ export async function POST(request: Request) {
     }
 
     // 在Netlify环境下使用/tmp目录
-    console.log(`process.env.NETLIFY_ENV`, process.env.NETLIFY_ENV)
-    const tempDir = process.env.NETLIFY_ENV ? '/tmp' : path.join(process.cwd(), 'temp');
+    console.log('检查Netlify环境变量:', process.env.NETLIFY, process.env.NETLIFY_ENV);
+    const tempDir = process.env.NETLIFY ? '/tmp' : path.join(process.cwd(), 'temp');
+    console.log('临时目录路径:', tempDir);
     await fs.mkdir(tempDir, { recursive: true });
+    console.log('目录创建成功:', tempDir);
 
     // 生成唯一文件名
     const fileName = `${uuidv4()}.jpg`;
     const filePath = path.join(tempDir, fileName);
+    console.log('文件保存路径:', filePath);
 
     // 保存文件
+    console.log('开始保存文件...');
     await fs.writeFile(filePath, base64Data, 'base64');
+    console.log('文件保存成功');
 
     // 直接调用OCR服务识别图片
+    console.log('开始OCR识别...');
     const ocrText = await OCRService.getInstance().recognize(base64Data);
+    console.log('OCR识别结果:', ocrText);
     const ocrData = {
       words_result: ocrText.split('\n').map(text => ({ words: text }))
     };
+    console.log('OCR处理后的数据:', ocrData);
     
     // 调用LLM服务分析配料
     try {
@@ -56,8 +64,6 @@ export async function POST(request: Request) {
       const ingredients = await llmService.analyzeIngredients(
         ocrRes
       );
-
-      console.log(111, ingredients)
 
       return NextResponse.json({
         success: true,
