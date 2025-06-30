@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, ChangeEvent } from 'react';
+import { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { compressImage } from '@/src/lib/image-utils';
 import { toast } from 'react-hot-toast';
 import Button from '../../src/components/Button'; // 导入Button组件
 import { ingredientItem } from '@/src/types/ingredients';
+import vconsole from  'vconsole'
 
 type IngredientResult = ingredientItem[];
 
@@ -14,6 +15,10 @@ export default function UploadPage() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [ingredients, setIngredients] = useState<IngredientResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    new vconsole()
+  }, [])
 
   const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

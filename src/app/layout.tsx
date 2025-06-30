@@ -1,7 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import '@/lib/vconsole'; // 引入vconsole
 
 const inter = Inter({ subsets: ['latin'] });
 
