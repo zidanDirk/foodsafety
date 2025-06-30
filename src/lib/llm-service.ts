@@ -115,7 +115,7 @@ export class LLMService {
       ],
       temperature: 0
     });
-    console.log(22233, response.choices[0].message.content)
+    console.log(`analyzeIngredients llm res:`, response.choices[0].message.content)
     const content = response.choices[0].message.content;
     // 处理可能的代码块标记
     const cleanedContent = content.replace(/```(json)?/g, '').trim();

@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     }
 
     // 创建临时目录
-    const tempDir = path.join(process.cwd(), 'public', 'temp');
+    console.log(`pwd`, path.join(process.cwd()));
+    const tempDir = path.join(process.cwd(), 'temp');
     await fs.mkdir(tempDir, { recursive: true });
 
     // 生成唯一文件名
