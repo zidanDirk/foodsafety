@@ -43,5 +43,5 @@ status = 200
       Cache-Control = "public, max-age=31536000, immutable"
 
 [functions]
-  # 设置所有函数的默认超时时间（毫秒）
-  timeout = 26000  # 26秒
+  [functions."*"]  # 使用通配符匹配所有函数
+    timeout = 26000
