@@ -59,10 +59,10 @@ export class LLMService {
     };
   }
 
-  public async analyzeIngredients(text: string): Promise<Array<ingredientItem>> {
+  public async *analyzeIngredients(text: string): AsyncGenerator<string, Array<ingredientItem>> {
     console.log(`start analyzeIngredients ...`)
     try {
-      const response = await this.chatCompletion({
+      const stream = await this.client.chat.completions.create({
         model: this.model,
         messages: [
           {
@@ -115,18 +115,26 @@ export class LLMService {
             content: `请分析以下食品成分：${text}`
           }
         ],
-        temperature: 0
+        temperature: 0,
+        stream: true
       });
-      console.log(`analyzeIngredients llm res:`, response.choices[0].message.content)
-      const content = response.choices[0].message.content;
+
+      let fullContent = '';
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        fullContent += content;
+        yield content;
+      }
+
+      console.log(`analyzeIngredients llm res:`, fullContent)
       // 处理可能的代码块标记
-      const cleanedContent = content.replace(/```(json)?/g, '').trim();
+      const cleanedContent = fullContent.replace(/```(json)?/g, '').trim();
       return JSON.parse(cleanedContent);
     }
    catch(e) {
     console.log(`analyzeIngredients error log ....`, e)
     console.error(`analyzeIngredients error`, e)
+    throw e;
    }
-   return []
   }
 }

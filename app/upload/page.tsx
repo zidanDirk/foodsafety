@@ -13,12 +13,9 @@ export default function UploadPage() {
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [ocrText, setOcrText] = useState('');
   const [ingredients, setIngredients] = useState<IngredientResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    new vconsole()
-  }, [])
 
   const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,7 +74,72 @@ export default function UploadPage() {
       const result = await response.json();
       if (result.success) {
         toast.success('识别成功');
-        setIngredients(result.ingredients);
+        setOcrText(result.ocrRes);
+        
+        // 调用analyze API进行LLM分析(流式)
+        const analyzeResponse = await fetch('/api/analyze', {
+          method: 'POST',
+          body: JSON.stringify({ text: result.ocrRes }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!analyzeResponse.ok) {
+          toast.error('配料分析失败');
+          return;
+        }
+
+        const reader = analyzeResponse.body?.getReader();
+        if (!reader) {
+          toast.error('无法读取响应流');
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let fullText = '';
+        
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            console.log(222, value)
+            if (value) {
+              const textChunk = decoder.decode(value);
+              fullText += textChunk;
+              console.log(111, fullText)
+            }
+          }
+
+          // 处理流式响应中的JSON数据
+          const jsonStart = fullText.indexOf('[');
+          const jsonEnd = fullText.lastIndexOf(']') + 1;
+          console.log('Full text received from stream:', fullText); // Added log
+          if (jsonStart !== -1 && jsonEnd !== -1) {
+            const jsonStr = fullText.slice(jsonStart, jsonEnd);
+            console.log('Extracted JSON string:', jsonStr); // Added log
+            try {
+              const data = JSON.parse(jsonStr);
+              console.log('Parsed data:', data); // Added log
+              if (Array.isArray(data)) {
+                setIngredients(data);
+              } else {
+                console.error('Parsed data is not an array:', data); // Added log
+                toast.error('解析响应数据失败: 数据格式不正确'); // Added toast
+              }
+            } catch (e: any) {
+              console.error('解析JSON失败:', e?.message || String(e)); // Improved error logging
+              toast.error('解析响应数据失败: JSON解析错误'); // Added toast
+            }
+          } else {
+            console.error('JSON array start or end not found in fullText:', fullText); // Added log
+            toast.error('解析响应数据失败: 未找到JSON数组'); // Added toast
+          }
+        } catch (error: any) {
+          console.error('解析最终JSON失败:', error?.message || String(error)); // Improved error logging
+          toast.error('解析响应数据失败');
+        }
       } else {
         toast.error(`识别失败: ${result.error || '未知错误'}`);
       }

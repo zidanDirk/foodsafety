@@ -3,7 +3,6 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { OCRService } from '@/lib/ocr-service';
-import { LLMService } from '@/lib/llm-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,18 +66,30 @@ export async function POST(request: Request) {
         )
       }
 
-      console.log('初始化LLM服务...');
-      const llmService = LLMService.getInstance();
-      console.log('开始分析配料...');
-      const ingredients = await llmService.analyzeIngredients(ocrRes);
-      console.log('配料分析结果:', ingredients);
+      // // 调用analyze API分析配料
+      // console.log('调用analyze API分析配料...');
+      // const analyzeResponse = await fetch(`${request.headers.get('origin')}/api/analyze`, {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({ text: ocrRes }),
+      // });
+      
+      // if (!analyzeResponse.ok) {
+      //   throw new Error('配料分析失败');
+      // }
+
+      // const { ingredients } = await analyzeResponse.json();
+      // console.log('配料分析结果:', ingredients);
 
       console.log('准备返回成功响应');
       return NextResponse.json({
         success: true,
         base64: base64Data,
         tempPath: process.env.NETLIFY ? fileName : `/temp/${fileName}`,
-        ingredients
+        ocrRes,
+        // ingredients
       });
     } catch (error) {
       console.error('LLM分析错误:', error);
