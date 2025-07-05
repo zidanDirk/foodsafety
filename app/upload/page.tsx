@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useRef, ChangeEvent } from 'react';
+import React, { useState, useRef, ChangeEvent } from 'react';
 import { compressImage } from '@/src/lib/image-utils';
 import { toast } from 'react-hot-toast';
 import Button from '../../src/components/Button'; // 导入Button组件
+import UserInfo from '../../src/components/UserInfo';
 import { ingredientItem } from '@/src/types/ingredients';
+import { userService } from '../../src/lib/user-service';
 
 type IngredientResult = ingredientItem[];
 
@@ -73,6 +75,37 @@ export default function UploadPage() {
       if (result.success) {
         toast.success('识别成功');
         setIngredients(result.ingredients);
+
+        // 保存检测记录到数据库
+        try {
+          const currentUser = userService.getCurrentUser();
+          if (currentUser) {
+            // 获取用户在数据库中的记录
+            const userResponse = await fetch(`/api/users?uid=${currentUser.uid}`);
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+
+              // 保存检测记录
+              await fetch('/api/detections', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: userData.user.id,
+                  imageUrl: result.imageUrl || null,
+                  ocrResult: result.ocrResult || null,
+                  ingredients: result.ingredients || null,
+                  safetyAnalysis: result.safetyAnalysis || null,
+                  riskLevel: result.riskLevel || 'unknown'
+                }),
+              });
+            }
+          }
+        } catch (dbError) {
+          console.warn('Failed to save detection to database:', dbError);
+          // 不影响用户体验，只记录警告
+        }
       } else {
         toast.error(`识别失败: ${result.error || '未知错误'}`);
       }
@@ -85,92 +118,97 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-16rem)] py-8 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-      <div className="max-w-md w-full mx-auto bg-white rounded-3xl shadow-xl overflow-hidden p-8 border-4 border-accent">
-        <h1 className="text-3xl font-bold text-primary mb-6 text-center">📸 食品图片上传</h1>
-        
-        <div className="space-y-6">
-            <div 
-              className="border-4 border-dashed border-secondary rounded-2xl p-8 text-center hover:border-primary transition-all duration-200 ease-in-out transform hover:scale-105"
-            >
-            {image ? (
-              <div className="relative">
-                <img 
-                  src={image} 
-                  alt="预览" 
-                  className="img-preview mx-auto max-h-64 object-contain rounded-lg shadow-md cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsExpanded(!isExpanded);
-                  }}
-                />
-                {isExpanded && (
-                  <div 
-                    className="img-expanded"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsExpanded(false);
-                    }}
-                  >
-                    <img 
-                      src={image} 
-                      alt="放大预览" 
-                      className="max-w-full max-h-full object-contain"
+    <div className="min-h-[calc(100vh-16rem)] py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto">
+        <UserInfo />
+        <div className="flex items-center justify-center">
+          <div className="max-w-md w-full mx-auto bg-white rounded-3xl shadow-xl overflow-hidden p-8 border-4 border-accent">
+            <h1 className="text-3xl font-bold text-primary mb-6 text-center">📸 食品图片上传</h1>
+
+            <div className="space-y-6">
+              <div
+                className="border-4 border-dashed border-secondary rounded-2xl p-8 text-center hover:border-primary transition-all duration-200 ease-in-out transform hover:scale-105"
+              >
+                {image ? (
+                  <div className="relative">
+                    <img
+                      src={image}
+                      alt="预览"
+                      className="img-preview mx-auto max-h-64 object-contain rounded-lg shadow-md cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsExpanded(!isExpanded);
+                      }}
+                    />
+                    {isExpanded && (
+                      <div
+                        className="img-expanded"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsExpanded(false);
+                        }}
+                      >
+                        <img
+                          src={image}
+                          alt="放大预览"
+                          className="max-w-full max-h-full object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      variant="secondary"
+                      className="w-full py-8"
+                    >
+                      <div className="space-y-2">
+                        <span className="text-4xl block">🖼️</span>
+                        <p className="text-lg font-semibold">选择文件</p>
+                        <p className="text-sm text-gray-500">支持JPEG/PNG格式，最大8MB</p>
+                      </div>
+                    </Button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImageChange}
+                      accept="image/jpeg,image/png"
+                      className="hidden"
                     />
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="space-y-4">
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  variant="secondary"
-                  className="w-full py-8"
-                >
-                  <div className="space-y-2">
-                    <span className="text-4xl block">🖼️</span>
-                    <p className="text-lg font-semibold">选择文件</p>
-                    <p className="text-sm text-gray-500">支持JPEG/PNG格式，最大8MB</p>
-                  </div>
-                </Button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImageChange}
-                  accept="image/jpeg,image/png"
-                  className="hidden"
-                />
-              </div>
-            )}
-          </div>
 
-          <Button
-            onClick={handleUpload}
-            disabled={!image || isLoading}
-            variant="primary"
-            className="w-full"
-          >
-            {isLoading ? '🚀 处理中...' : '✨ 上传图片'}
-          </Button>
-              
-          {ingredients && (
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-              <h3 className="font-bold text-lg mb-2">配料成分：</h3>
-              {ingredients ? (
-                <ul className="list-disc pl-5 space-y-1">
-                  {ingredients.map((item, index) => (
-                    <li key={index}>
-                      <p>{item.name}:{item.description}</p>
-                      <p>是否健康:{item.is_healthy}</p>
-                      <p>健康原因:{item.health_reason}</p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>未识别到有效配料</p>
+              <Button
+                onClick={handleUpload}
+                disabled={!image || isLoading}
+                variant="primary"
+                className="w-full"
+              >
+                {isLoading ? '🚀 处理中...' : '✨ 上传图片'}
+              </Button>
+
+              {ingredients && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="font-bold text-lg mb-2">配料成分：</h3>
+                  {ingredients ? (
+                    <ul className="list-disc pl-5 space-y-1">
+                      {ingredients.map((item, index) => (
+                        <li key={index}>
+                          <p>{item.name}:{item.description}</p>
+                          <p>是否健康:{item.is_healthy}</p>
+                          <p>健康原因:{item.health_reason}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>未识别到有效配料</p>
+                  )}
+                </div>
               )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
