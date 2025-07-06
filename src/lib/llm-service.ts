@@ -89,7 +89,7 @@ export class LLMService {
 3. 验证每个成分是否存在错别字并自动纠正
 4. 过滤掉非成分文本
 5. 为每个成分生成详细描述和健康评估
-6. 返回JSON数组格式的结果
+6. 返回JSON数组格式的结果，请严格遵循返回 JSON 数组格式
 
 ## Examples:
 输入：黑米、赤藓糖醇、黑芝麻、黑豆、黑桑椹
@@ -116,9 +116,148 @@ export class LLMService {
       temperature: 0
     });
     console.log(`analyzeIngredients llm res:`, response.choices[0].message.content)
+    console.log(`analyzeIngredients llm res end`)
     const content = response.choices[0].message.content;
-    // 处理可能的代码块标记
-    const cleanedContent = content.replace(/```(json)?/g, '').trim();
+
+    // 更健壮地处理可能的代码块标记
+    const cleanedContent = this.extractJsonFromContent(content);
     return JSON.parse(cleanedContent);
+  }
+
+  /**
+   * 从LLM响应内容中提取JSON
+   * 支持多种格式：
+   * 1. 纯JSON
+   * 2. ```json ... ```
+   * 3. ``` ... ```
+   * 4. 混合文本中的JSON代码块
+   */
+  private extractJsonFromContent(content: string): string {
+    if (!content) {
+      throw new Error('LLM返回内容为空');
+    }
+
+    // 首先尝试匹配 ```json ... ``` 格式
+    // 使用更精确的匹配，避免嵌套代码块问题
+    const jsonBlockMatch = this.extractCodeBlock(content, 'json');
+    if (jsonBlockMatch) {
+      return jsonBlockMatch.trim();
+    }
+
+    // 然后尝试匹配 ``` ... ``` 格式（可能是JSON但没有标明语言）
+    const codeBlockMatch = this.extractCodeBlock(content);
+    if (codeBlockMatch) {
+      const blockContent = codeBlockMatch.trim();
+      // 检查是否看起来像JSON（以 [ 或 { 开头）
+      if (blockContent.startsWith('[') || blockContent.startsWith('{')) {
+        return blockContent;
+      }
+    }
+
+    // 如果没有代码块，尝试查找JSON数组或对象
+    // 查找以 [ 开头的JSON数组
+    const arrayMatch = this.extractJsonStructure(content, '[', ']');
+    if (arrayMatch) {
+      return arrayMatch.trim();
+    }
+
+    // 查找以 { 开头的JSON对象
+    const objectMatch = this.extractJsonStructure(content, '{', '}');
+    if (objectMatch) {
+      return objectMatch.trim();
+    }
+
+    // 如果都没找到，移除可能的markdown标记并返回
+    const fallbackContent = content
+      .replace(/```(json)?/g, '')  // 移除代码块标记
+      .replace(/^\s*[\r\n]+|[\r\n]+\s*$/g, '')  // 移除首尾空行
+      .trim();
+
+    if (!fallbackContent) {
+      throw new Error('无法从LLM响应中提取有效的JSON内容');
+    }
+
+    return fallbackContent;
+  }
+
+  /**
+   * 提取代码块内容，处理嵌套的代码块标记
+   */
+  private extractCodeBlock(content: string, language?: string): string | null {
+    const langPattern = language ? `\\b${language}\\b` : '';
+    const startPattern = new RegExp(`\`\`\`${langPattern}\\s*`, 'i');
+
+    const startMatch = content.search(startPattern);
+    if (startMatch === -1) {
+      return null;
+    }
+
+    // 找到开始位置
+    const afterStart = content.substring(startMatch);
+    const contentStart = afterStart.search(/\n/) + 1;
+    if (contentStart === 0) {
+      return null;
+    }
+
+    const blockContent = afterStart.substring(contentStart);
+
+    // 查找结束的 ```，需要在行首或前面有换行符
+    const endMatch = blockContent.search(/\n\s*```\s*$/m);
+    if (endMatch === -1) {
+      // 如果没找到标准结尾，尝试查找任何 ```
+      const anyEndMatch = blockContent.search(/```/);
+      if (anyEndMatch === -1) {
+        return null;
+      }
+      return blockContent.substring(0, anyEndMatch);
+    }
+
+    return blockContent.substring(0, endMatch);
+  }
+
+  /**
+   * 提取JSON结构（数组或对象），处理嵌套括号
+   */
+  private extractJsonStructure(content: string, startChar: string, endChar: string): string | null {
+    const startIndex = content.indexOf(startChar);
+    if (startIndex === -1) {
+      return null;
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = startIndex; i < content.length; i++) {
+      const char = content[i];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === '\\' && inString) {
+        escaped = true;
+        continue;
+      }
+
+      if (char === '"' && !escaped) {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === startChar) {
+          depth++;
+        } else if (char === endChar) {
+          depth--;
+          if (depth === 0) {
+            return content.substring(startIndex, i + 1);
+          }
+        }
+      }
+    }
+
+    return null;
   }
 }

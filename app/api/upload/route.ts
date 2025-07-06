@@ -2,18 +2,25 @@ import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { OCRService } from '@/lib/ocr-service';
-import { LLMService } from '@/lib/llm-service';
+import { AsyncTaskService } from '@/lib/async-task-service';
+import { DatabaseService } from '@/lib/database-service';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const { image } = await request.json();
-    
+    const { image, userId } = await request.json();
+
     if (!image) {
       return NextResponse.json(
         { error: '未提供图片数据' },
+        { status: 400 }
+      );
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: '未提供用户ID' },
         { status: 400 }
       );
     }
@@ -27,70 +34,69 @@ export async function POST(request: Request) {
       );
     }
 
-    // 在Netlify环境下使用/tmp目录
-    console.log('检查Netlify环境变量:', process.env.NETLIFY, process.env.NETLIFY_ENV);
-    const tempDir = process.env.NETLIFY_ENV ? '/tmp' : path.join(process.cwd(), 'temp');
-    console.log('临时目录路径:', tempDir);
-    await fs.mkdir(tempDir, { recursive: true });
-    console.log('目录创建成功:', tempDir);
-
-    // 生成唯一文件名
+    // 生成文件名
     const fileName = `${uuidv4()}.jpg`;
-    const filePath = path.join(tempDir, fileName);
-    console.log('文件保存路径:', filePath);
 
-    // 保存文件
-    console.log('开始保存文件...');
-    await fs.writeFile(filePath, base64Data, 'base64');
-    console.log('文件保存成功');
+    // 在Netlify环境中，我们不需要保存临时文件
+    if (!process.env.NETLIFY) {
+      // 本地开发环境：保存临时文件
+      const tempDir = path.join(process.cwd(), 'public', 'temp');
 
-    // 直接调用OCR服务识别图片
-    console.log('开始OCR识别...');
-    const ocrText = await OCRService.getInstance().recognize(base64Data);
-    console.log('OCR识别结果:', ocrText);
-    const ocrData = {
-      words_result: ocrText.split('\n').map(text => ({ words: text }))
-    };
-    console.log('OCR处理后的数据:', ocrData);
-    
-    // 调用LLM服务分析配料
-    try {
-      console.log('开始处理OCR结果...');
-      const ocrRes = ocrData.words_result?.map(item => item.words).join('\n') || ''
-      console.log('OCR处理结果:', ocrRes || '空内容');
-      
-      if(!ocrRes) {
-        console.log('错误: 无法识别图片中的文字');
-        return NextResponse.json(
-          { error: '无法识别图片中的文字' },
-          { status: 500 }
-        )
+      // 确保temp目录存在
+      try {
+        await fs.access(tempDir);
+      } catch {
+        await fs.mkdir(tempDir, { recursive: true });
       }
 
-      console.log('初始化LLM服务...');
-      const llmService = LLMService.getInstance();
-      console.log('开始分析配料...');
-      const ingredients = await llmService.analyzeIngredients(ocrRes);
-      console.log('配料分析结果:', ingredients);
+      const filePath = path.join(tempDir, fileName);
 
-      console.log('准备返回成功响应');
-      return NextResponse.json({
-        success: true,
-        base64: base64Data,
-        tempPath: process.env.NETLIFY ? fileName : `/temp/${fileName}`,
-        ingredients
-      });
-    } catch (error) {
-      console.error('LLM分析错误:', error);
+      // 将base64转换为buffer并保存
+      const buffer = Buffer.from(base64Data, 'base64');
+      await fs.writeFile(filePath, buffer);
+
+      console.log('文件已保存到:', filePath);
+    }
+
+    // 获取用户信息
+    const user = await DatabaseService.getUserByUid(userId);
+    if (!user) {
       return NextResponse.json(
-        { error: '配料分析失败' },
-        { status: 500 }
+        { error: '用户不存在' },
+        { status: 404 }
       );
     }
+
+    // 创建检测记录
+    const detection = await DatabaseService.createDetection({
+      userId: user.id,
+      imageUrl: process.env.NETLIFY ? fileName : `/temp/${fileName}`,
+      isProcessed: false
+    });
+
+    // 创建异步任务
+    const taskService = AsyncTaskService.getInstance();
+    const task = await taskService.createTask(
+      user.id,
+      'food_detection',
+      { base64Data, fileName },
+      detection.id
+    );
+
+    console.log(`Created async task ${task.id} for user ${userId}`);
+
+    // 立即返回任务ID，不等待处理完成
+    return NextResponse.json({
+      success: true,
+      taskId: task.id,
+      detectionId: detection.id,
+      message: '任务已创建，正在后台处理...'
+    });
+
   } catch (error) {
-    console.error('上传错误:', error);
+    console.error('上传处理错误:', error);
     return NextResponse.json(
-      { error: '服务器处理图片时出错' },
+      { error: '文件处理失败' },
       { status: 500 }
     );
   }

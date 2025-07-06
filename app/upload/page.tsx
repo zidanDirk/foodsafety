@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, ChangeEvent } from 'react';
+import React, { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { compressImage } from '@/src/lib/image-utils';
 import { toast } from 'react-hot-toast';
 import Button from '../../src/components/Button'; // 导入Button组件
@@ -15,7 +15,24 @@ export default function UploadPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [ingredients, setIngredients] = useState<IngredientResult | null>(null);
+  const [userInitialized, setUserInitialized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 初始化用户服务
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        await userService.initialize();
+        setUserInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize user:', error);
+        // 即使初始化失败，也允许用户继续使用（使用简化的UID）
+        setUserInitialized(true);
+      }
+    };
+
+    initializeUser();
+  }, []);
 
   const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,11 +74,53 @@ export default function UploadPage() {
   const handleUpload = async () => {
     if (!image) return;
 
+    // 获取用户ID，优先使用userService，失败时使用备用方案
+    let userId: string;
+    const currentUser = userService.getCurrentUser();
+
+    if (currentUser) {
+      userId = currentUser.uid;
+    } else {
+      // 备用方案：使用简化的用户ID生成
+      try {
+        const storedUID = localStorage.getItem('foodsafety_user_uid');
+        if (storedUID) {
+          userId = storedUID;
+        } else {
+          // 生成简单的用户ID
+          const fingerprint = [
+            navigator.userAgent,
+            navigator.language,
+            screen.width + 'x' + screen.height,
+            new Date().getTimezoneOffset(),
+            navigator.platform
+          ].join('|');
+
+          let hash = 0;
+          for (let i = 0; i < fingerprint.length; i++) {
+            const char = fingerprint.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+          }
+
+          userId = `fs_user_${Math.abs(hash).toString(36)}_${Date.now().toString(36).slice(-4)}`;
+          localStorage.setItem('foodsafety_user_uid', userId);
+        }
+      } catch (error) {
+        // 如果localStorage也不可用，使用临时ID
+        userId = `temp_user_${Date.now()}`;
+      }
+    }
+
     setIsLoading(true);
     try {
+      // 创建异步任务
       const response = await fetch('/api/upload', {
         method: 'POST',
-        body: JSON.stringify({ image }),
+        body: JSON.stringify({
+          image,
+          userId: userId
+        }),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -73,48 +132,79 @@ export default function UploadPage() {
 
       const result = await response.json();
       if (result.success) {
-        toast.success('识别成功');
-        setIngredients(result.ingredients);
+        toast.success('任务已创建，正在处理中...');
 
-        // 保存检测记录到数据库
-        try {
-          const currentUser = userService.getCurrentUser();
-          if (currentUser) {
-            // 获取用户在数据库中的记录
-            const userResponse = await fetch(`/api/users?uid=${currentUser.uid}`);
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-
-              // 保存检测记录
-              await fetch('/api/detections', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  userId: userData.user.id,
-                  imageUrl: result.imageUrl || null,
-                  ocrResult: result.ocrResult || null,
-                  ingredients: result.ingredients || null,
-                  safetyAnalysis: result.safetyAnalysis || null,
-                  riskLevel: result.riskLevel || 'unknown'
-                }),
-              });
-            }
-          }
-        } catch (dbError) {
-          console.warn('Failed to save detection to database:', dbError);
-          // 不影响用户体验，只记录警告
-        }
+        // 开始轮询任务状态
+        pollTaskStatus(result.taskId);
       } else {
-        toast.error(`识别失败: ${result.error || '未知错误'}`);
+        toast.error(`上传失败: ${result.error || '未知错误'}`);
+        setIsLoading(false);
       }
     } catch (error) {
       toast.error('上传失败');
       console.error(error);
-    } finally {
       setIsLoading(false);
     }
+  };
+
+  // 轮询任务状态
+  const pollTaskStatus = async (taskId: string) => {
+    const maxAttempts = 60; // 最多轮询60次（2分钟）
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        attempts++;
+        const response = await fetch(`/api/task-status?taskId=${taskId}`);
+
+        if (!response.ok) {
+          throw new Error('获取任务状态失败');
+        }
+
+        const taskStatus = await response.json();
+
+        if (taskStatus.status === 'completed') {
+          // 任务完成
+          setIsLoading(false);
+          toast.success('处理完成！');
+
+          if (taskStatus.result?.ingredients) {
+            setIngredients(taskStatus.result.ingredients);
+          }
+
+          return;
+        } else if (taskStatus.status === 'failed') {
+          // 任务失败
+          setIsLoading(false);
+          toast.error(`处理失败: ${taskStatus.error || '未知错误'}`);
+          return;
+        } else if (taskStatus.status === 'processing') {
+          // 任务处理中，显示进度
+          const progress = taskStatus.progress || 0;
+          console.log(`处理中... ${progress}%`);
+        }
+
+        // 继续轮询
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 2000); // 每2秒轮询一次
+        } else {
+          setIsLoading(false);
+          toast.error('处理超时，请重试');
+        }
+
+      } catch (error) {
+        console.error('轮询任务状态失败:', error);
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 2000);
+        } else {
+          setIsLoading(false);
+          toast.error('获取处理状态失败');
+        }
+      }
+    };
+
+    // 开始轮询
+    setTimeout(poll, 1000); // 1秒后开始第一次轮询
   };
 
   return (

@@ -51,6 +51,23 @@ export const userFeedback = pgTable('user_feedback', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 异步任务状态表
+export const asyncTasks = pgTable('async_tasks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  taskType: text('task_type').notNull(), // 任务类型: 'food_detection'
+  status: text('status').notNull().default('pending'), // pending, processing, completed, failed
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  detectionId: uuid('detection_id').references(() => foodDetections.id), // 关联的检测记录ID
+  inputData: jsonb('input_data'), // 输入数据(如base64图片)
+  result: jsonb('result'), // 处理结果
+  error: text('error'), // 错误信息
+  progress: integer('progress').default(0), // 进度百分比 0-100
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // 系统统计表
 export const systemStats = pgTable('system_stats', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -74,6 +91,9 @@ export type NewIngredient = typeof ingredientsDatabase.$inferInsert;
 
 export type Feedback = typeof userFeedback.$inferSelect;
 export type NewFeedback = typeof userFeedback.$inferInsert;
+
+export type AsyncTask = typeof asyncTasks.$inferSelect;
+export type NewAsyncTask = typeof asyncTasks.$inferInsert;
 
 export type SystemStat = typeof systemStats.$inferSelect;
 export type NewSystemStat = typeof systemStats.$inferInsert;

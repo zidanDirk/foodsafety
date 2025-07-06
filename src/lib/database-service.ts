@@ -1,6 +1,6 @@
 import { eq, desc, and } from 'drizzle-orm';
 import { db } from './db';
-import { users, foodDetections, userFeedback, type User, type NewUser, type FoodDetection, type NewFoodDetection } from './schema';
+import { users, foodDetections, userFeedback, asyncTasks, type User, type NewUser, type FoodDetection, type NewFoodDetection, type AsyncTask, type NewAsyncTask } from './schema';
 
 export class DatabaseService {
   // 用户相关操作
@@ -126,6 +126,52 @@ export class DatabaseService {
       totalDetections,
       todayDetections: todayDetections.length
     };
+  }
+
+  // 异步任务相关操作
+  static async createAsyncTask(taskData: Omit<NewAsyncTask, 'id' | 'createdAt' | 'updatedAt'>): Promise<AsyncTask> {
+    const [task] = await db.insert(asyncTasks).values(taskData).returning();
+    return task;
+  }
+
+  static async getAsyncTaskById(id: string): Promise<AsyncTask | null> {
+    const [task] = await db.select().from(asyncTasks).where(eq(asyncTasks.id, id)).limit(1);
+    return task || null;
+  }
+
+  static async updateAsyncTask(
+    id: string,
+    updateData: {
+      status?: string;
+      progress?: number;
+      result?: any;
+      error?: string;
+      startedAt?: Date;
+      completedAt?: Date;
+    }
+  ): Promise<void> {
+    await db.update(asyncTasks)
+      .set({
+        ...updateData,
+        updatedAt: new Date()
+      })
+      .where(eq(asyncTasks.id, id));
+  }
+
+  static async getUserAsyncTasks(userId: string, limit: number = 10): Promise<AsyncTask[]> {
+    return await db.select()
+      .from(asyncTasks)
+      .where(eq(asyncTasks.userId, userId))
+      .orderBy(desc(asyncTasks.createdAt))
+      .limit(limit);
+  }
+
+  static async getPendingAsyncTasks(limit: number = 10): Promise<AsyncTask[]> {
+    return await db.select()
+      .from(asyncTasks)
+      .where(eq(asyncTasks.status, 'pending'))
+      .orderBy(asyncTasks.createdAt)
+      .limit(limit);
   }
 
   // 清理旧数据

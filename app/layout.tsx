@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import '../src/App.scss';
 import { Providers } from './providers';
+import '../src/lib/task-processor-init';
 
 export default function RootLayout({
   children,
