@@ -9,6 +9,11 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Netlify函数配置
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 [dev]
   command = "pnpm dev"
   port = 3000
@@ -32,11 +37,19 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# API路由重定向到Netlify函数
+[[redirects]]
+  from = "/api/upload"
+  to = "/.netlify/functions/upload"
+  status = 200
+
+[[redirects]]
+  from = "/api/task-status"
+  to = "/.netlify/functions/task-status"
+  status = 200
+
+# 其他API路由使用Next.js处理
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
-
-[functions]
-  directory = ".netlify/functions"
-  node_bundler = "esbuild"
