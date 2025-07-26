@@ -150,7 +150,7 @@ ${rawText}
       // 尝试提取JSON部分
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
       if (!jsonMatch) {
-        throw new Error('AI响应中未找到JSON格式数据')
+        throw new Error('AI响应中未找到JSON格式数据..')
       }
 
       const parsedData = JSON.parse(jsonMatch[0])
