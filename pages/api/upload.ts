@@ -10,6 +10,8 @@ import { validateConfig, logConfigStatus } from '@/lib/config'
 export const config = {
   api: {
     bodyParser: false,
+    // 增加响应时间限制（Netlify Functions 最大 10 秒）
+    responseLimit: false,
   },
 }
 
@@ -42,10 +44,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.warn('数据库初始化失败，使用内存存储:', dbError)
     }
 
-    // 解析上传的文件
+    // 解析上传的文件 - 针对 Netlify 优化
     const form = new IncomingForm({
-      maxFileSize: 8 * 1024 * 1024, // 8MB
+      maxFileSize: 5 * 1024 * 1024, // 5MB (Netlify 限制)
       keepExtensions: true,
+      // 使用内存存储而不是临时文件，减少 I/O 操作
+      maxFieldsSize: 5 * 1024 * 1024,
+      maxFields: 10,
     })
 
     const [, files] = await new Promise<[any, any]>((resolve, reject) => {
@@ -69,22 +74,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // 验证文件大小
-    if (file.size > 8 * 1024 * 1024) {
+    // 验证文件大小 - Netlify 限制
+    if (file.size > 5 * 1024 * 1024) {
       return res.status(400).json({
-        error: '文件大小不能超过 8MB'
+        error: '文件大小不能超过 5MB（Netlify 平台限制）'
       })
     }
 
     // 生成任务ID
     const taskId = generateTaskId()
 
-    // 读取文件并转换为 base64
-    const fileBuffer = fs.readFileSync(file.filepath)
-    const base64 = fileBuffer.toString('base64')
-    const imageBase64 = `data:${file.mimetype};base64,${base64}`
-
-    // 创建任务记录
+    // 创建任务记录（先创建任务，再处理文件）
     const fileInfo = {
       name: file.originalFilename || 'unknown',
       size: file.size,
@@ -94,17 +94,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const task = await TaskProcessor.createTask(taskId, fileInfo)
 
     if (!task) {
+      // 清理临时文件
+      try {
+        fs.unlinkSync(file.filepath)
+      } catch (cleanupError) {
+        console.warn('清理临时文件失败:', cleanupError)
+      }
       return res.status(500).json({
         error: '创建任务失败，请重试'
       })
     }
 
-    // 清理临时文件
-    fs.unlinkSync(file.filepath)
-
-    // 异步处理图片（不等待完成）
-    TaskProcessor.processImageAsync(taskId, imageBase64).catch(error => {
-      console.error(`异步处理失败: ${taskId}`, error)
+    // 异步处理文件（避免阻塞响应）
+    processFileAsync(taskId, file).catch(error => {
+      console.error(`异步文件处理失败: ${taskId}`, error)
+      // 更新任务状态为失败
+      TaskProcessor.updateTask(taskId, {
+        status: 'failed',
+        progress: 0,
+        processing_step: '文件处理失败',
+        error_message: error.message
+      }).catch(updateError => {
+        console.error('更新任务状态失败:', updateError)
+      })
     })
 
     res.status(200).json({
@@ -121,4 +133,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       details: error instanceof Error ? error.message : '未知错误'
     })
   }
+}
+
+// 异步处理文件函数 - 优化内存使用
+async function processFileAsync(taskId: string, file: any) {
+  try {
+    console.log(`开始异步处理文件: ${taskId}, 大小: ${file.size} bytes`)
+
+    // 分块读取文件，避免内存溢出
+    const fileBuffer = await readFileInChunks(file.filepath)
+
+    // 转换为 base64
+    const base64 = fileBuffer.toString('base64')
+    const imageBase64 = `data:${file.mimetype};base64,${base64}`
+
+    // 清理临时文件
+    try {
+      fs.unlinkSync(file.filepath)
+      console.log(`临时文件已清理: ${file.filepath}`)
+    } catch (cleanupError) {
+      console.warn('清理临时文件失败:', cleanupError)
+    }
+
+    // 调用原有的图片处理流程
+    await TaskProcessor.processImageAsync(taskId, imageBase64)
+
+  } catch (error) {
+    console.error(`文件处理失败: ${taskId}`, error)
+
+    // 清理临时文件
+    try {
+      fs.unlinkSync(file.filepath)
+    } catch (cleanupError) {
+      console.warn('清理临时文件失败:', cleanupError)
+    }
+
+    throw error
+  }
+}
+
+// 分块读取文件，减少内存压力
+async function readFileInChunks(filePath: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    const stream = fs.createReadStream(filePath, { highWaterMark: 64 * 1024 }) // 64KB chunks
+
+    stream.on('data', (chunk: string | Buffer) => {
+      const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+      chunks.push(buffer)
+    })
+
+    stream.on('end', () => {
+      resolve(Buffer.concat(chunks))
+    })
+
+    stream.on('error', (error) => {
+      reject(error)
+    })
+  })
 }

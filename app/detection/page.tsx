@@ -7,28 +7,31 @@ export default function DetectionPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [compressing, setCompressing] = useState(false)
+  const [compressionInfo, setCompressionInfo] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   const handleFileSelect = (file: File) => {
     setError(null)
-    
+    setCompressionInfo(null)
+
     // 验证文件类型
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
     if (!validTypes.includes(file.type)) {
       setError('只支持 JPEG、PNG、GIF、WebP 格式的图片')
       return
     }
-    
-    // 验证文件大小 (8MB)
-    if (file.size > 8 * 1024 * 1024) {
-      setError('文件大小不能超过 8MB')
+
+    // 验证文件大小 (5MB - Netlify 限制)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('文件大小不能超过 5MB（平台限制）')
       return
     }
-    
+
     setSelectedFile(file)
-    
+
     // 创建预览
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -110,7 +113,7 @@ export default function DetectionPage() {
                   选择或拖拽图片
                 </h3>
                 <p className="text-gray-600 mb-4">
-                  支持 JPEG、PNG、GIF、WebP 格式，最大 8MB
+                  支持 JPEG、PNG、GIF、WebP 格式，最大 5MB
                 </p>
                 <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                   选择文件
@@ -153,10 +156,10 @@ export default function DetectionPage() {
                 
                 <button
                   onClick={handleUpload}
-                  disabled={uploading}
+                  disabled={uploading || compressing}
                   className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {uploading ? '正在分析...' : '开始分析'}
+                  {compressing ? '正在压缩图片...' : uploading ? '正在分析...' : '开始分析'}
                 </button>
               </div>
             )}
