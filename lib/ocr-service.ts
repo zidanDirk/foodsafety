@@ -234,6 +234,7 @@ export class OCRService {
   static async processImage(imageBase64: string): Promise<OCRResult> {
     try {
       const result = await this.extractTextFromBase64(imageBase64)
+      console.log(`ocr res`, JSON.stringify(result, null, 2))
       
       if (!result.success) {
         throw new Error(result.error || 'OCR处理失败')

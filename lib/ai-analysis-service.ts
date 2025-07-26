@@ -24,26 +24,28 @@ export class AIAnalysisService {
   private static readonly DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
   private static readonly MODEL_NAME = 'deepseek-chat'
 
-  // 分析配料健康度
-  static async analyzeIngredients(ingredients: Array<{ name: string; position: number }>): Promise<AIAnalysisResult> {
+  // 分析配料健康度 - 从OCR原始文本中提取并分析配料
+  static async analyzeIngredients(rawText: string): Promise<AIAnalysisResult> {
     try {
       // 如果没有配置API密钥，使用模拟数据
       if (!process.env.DEEPSEEK_API_KEY) {
         console.log('DeepSeek API未配置，使用模拟数据')
         return {
           success: true,
-          data: this.generateMockAnalysis(ingredients)
+          data: this.generateMockAnalysisFromText(rawText)
         }
       }
 
-      const prompt = this.buildAnalysisPrompt(ingredients)
+      const prompt = this.buildAnalysisPromptFromText(rawText)
+      console.log(`prompt: ${prompt}`)
       const response = await this.callDeepSeekAPI(prompt)
-      
+      console.log(`response: ${JSON.stringify(response, null, 2)}`)
+
       if (!response.success) {
         throw new Error(response.error || 'AI分析失败')
       }
 
-      const analysisData = this.parseAIResponse(response.data, ingredients)
+      const analysisData = this.parseAIResponseFromText(response.data || '')
       
       return {
         success: true,
@@ -53,21 +55,20 @@ export class AIAnalysisService {
     } catch (error) {
       console.error('AI健康度分析失败:', error)
       console.log('使用模拟数据作为降级方案')
-      
+
       return {
         success: true,
-        data: this.generateMockAnalysis(ingredients)
+        data: this.generateMockAnalysisFromText(rawText)
       }
     }
   }
 
-  // 构建分析提示词
-  private static buildAnalysisPrompt(ingredients: Array<{ name: string; position: number }>): string {
-    const ingredientList = ingredients.map(item => item.name).join('、')
-    
-    return `请作为一名专业的营养师，分析以下食品配料的健康度：
+  // 从OCR原始文本构建分析提示词
+  private static buildAnalysisPromptFromText(rawText: string): string {
+    return `请作为一名专业的营养师，从以下OCR识别的文本中提取配料信息并分析健康度：
 
-配料列表：${ingredientList}
+OCR识别文本：
+${rawText}
 
 请按照以下JSON格式返回分析结果：
 
@@ -87,11 +88,12 @@ export class AIAnalysisService {
 }
 
 要求：
-1. 评分要客观公正，基于营养学原理
-2. 理由要简洁明了，易于理解
-3. 分类要准确
-4. 建议要实用可行
-5. 只返回JSON，不要其他文字`
+1. 由于输入的配料表是通过 ocr 识别出来的，内容存在误差，先剔除非配料信息，只分析真正的配料
+2. 评分要客观公正，基于营养学原理
+3. 理由要简洁明了，易于理解
+4. 分类要准确
+5. 建议要实用可行
+6. 只返回JSON，不要其他文字`
   }
 
   // 调用DeepSeek API
@@ -111,10 +113,12 @@ export class AIAnalysisService {
               content: prompt
             }
           ],
-          temperature: 0.3,
+          temperature: 0,
           max_tokens: 2000
         })
       })
+
+      console.log(`deepseek res`, JSON.stringify(response, null, 2))
 
       if (!response.ok) {
         throw new Error(`DeepSeek API请求失败: ${response.status} ${response.statusText}`)
@@ -140,8 +144,8 @@ export class AIAnalysisService {
     }
   }
 
-  // 解析AI响应
-  private static parseAIResponse(aiResponse: string, ingredients: Array<{ name: string; position: number }>): HealthAnalysis {
+  // 解析AI响应（从文本分析）
+  private static parseAIResponseFromText(aiResponse: string): HealthAnalysis {
     try {
       // 尝试提取JSON部分
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
@@ -156,20 +160,11 @@ export class AIAnalysisService {
         throw new Error('AI响应数据格式不完整')
       }
 
-      // 确保所有配料都有评分
-      const scoredIngredients = new Set(parsedData.ingredientScores.map((item: any) => item.ingredient))
-      const missingIngredients = ingredients.filter(ing => !scoredIngredients.has(ing.name))
-      
-      // 为缺失的配料添加默认评分
-      missingIngredients.forEach(ingredient => {
-        parsedData.ingredientScores.push({
-          ingredient: ingredient.name,
-          score: 5,
-          reason: '常见食品配料，营养价值中等',
-          category: '其他',
-          healthImpact: '中性影响'
-        })
-      })
+      // AI 已经从文本中提取了所有配料，无需额外处理
+      // 验证 ingredientScores 数组不为空
+      if (!parsedData.ingredientScores || parsedData.ingredientScores.length === 0) {
+        throw new Error('AI 未能提取到配料信息')
+      }
 
       return {
         overallScore: Math.max(1, Math.min(10, Math.round(parsedData.overallScore))),
@@ -187,14 +182,58 @@ export class AIAnalysisService {
     } catch (error) {
       console.error('解析AI响应失败:', error)
       console.log('AI原始响应:', aiResponse)
-      
+
       // 返回降级分析
-      return this.generateMockAnalysis(ingredients)
+      return this.generateMockAnalysisFromText(aiResponse)
     }
   }
 
-  // 生成模拟分析结果
-  private static generateMockAnalysis(ingredients: Array<{ name: string; position: number }>): HealthAnalysis {
+  // 从文本生成模拟分析结果
+  private static generateMockAnalysisFromText(rawText: string): HealthAnalysis {
+    // 简单的配料提取逻辑
+    const ingredients = this.extractIngredientsFromText(rawText)
+
+    return this.generateMockAnalysisFromIngredients(ingredients)
+  }
+
+  // 从文本中提取配料
+  private static extractIngredientsFromText(rawText: string): Array<{ name: string; position: number }> {
+    // 查找配料相关的关键词
+    const ingredientKeywords = ['配料', '成分', '原料', '含有', '：', ':']
+    let ingredientText = rawText
+
+    // 尝试找到配料部分
+    for (const keyword of ingredientKeywords) {
+      const index = rawText.indexOf(keyword)
+      if (index !== -1) {
+        ingredientText = rawText.substring(index)
+        break
+      }
+    }
+
+    // 分割配料
+    const separators = ['、', '，', ',', '；', ';', ' ', '\n', '\t']
+    let ingredients = [ingredientText]
+
+    for (const separator of separators) {
+      ingredients = ingredients.flatMap(item => item.split(separator))
+    }
+
+    // 清理和过滤配料
+    const cleanedIngredients = ingredients
+      .map(item => item.trim())
+      .filter(item => item.length > 0 && item.length < 20) // 过滤太长或太短的项
+      .filter(item => !['配料', '成分', '原料', '含有', '：', ':'].includes(item))
+      .slice(0, 10) // 最多取10个配料
+
+    return cleanedIngredients.map((name, index) => ({
+      name,
+      position: index + 1
+    }))
+  }
+
+  // 生成模拟分析结果（从配料列表）
+  private static generateMockAnalysisFromIngredients(ingredients: Array<{ name: string; position: number }>): HealthAnalysis {
     const ingredientScores: IngredientScore[] = ingredients.map(ingredient => {
       const name = ingredient.name.toLowerCase()
       

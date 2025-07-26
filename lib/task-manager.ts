@@ -170,7 +170,7 @@ export class TaskProcessor {
       })
 
       const aiResult = await AIAnalysisService.analyzeIngredients(
-        ocrResult.extractedIngredients.ingredients
+        ocrResult.rawText
       )
 
       if (!aiResult.success) {
