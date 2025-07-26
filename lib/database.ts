@@ -1,6 +1,11 @@
 // 数据库连接和模式定义
 import { sql } from '@vercel/postgres'
 
+// 确保数据库连接配置
+if (!process.env.DATABASE_URL) {
+  console.warn('DATABASE_URL 环境变量未设置，某些功能可能无法正常工作')
+}
+
 export interface Task {
   id: string
   status: 'pending' | 'processing' | 'completed' | 'failed'

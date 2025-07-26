@@ -7,6 +7,13 @@ export class TaskProcessor {
   // 创建任务
   static async createTask(taskId: string, fileInfo: any): Promise<Task | null> {
     try {
+      // 检查数据库连接
+      if (!process.env.DATABASE_URL) {
+        console.warn('数据库未配置，使用内存存储')
+        // 可以在这里实现内存存储的降级方案
+        throw new Error('数据库未配置')
+      }
+
       const task = await DatabaseManager.createTask(taskId, fileInfo)
       if (task) {
         console.log(`任务创建成功: ${taskId}`)
