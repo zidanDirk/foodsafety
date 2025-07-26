@@ -32,8 +32,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // 确保数据库已初始化
-    await initializeDatabase()
+    // 初始化存储（数据库或内存）
+    await TaskProcessor.initializeStorage()
+
+    // 尝试初始化数据库表（如果使用数据库）
+    try {
+      await initializeDatabase()
+    } catch (dbError) {
+      console.warn('数据库初始化失败，使用内存存储:', dbError)
+    }
 
     // 解析上传的文件
     const form = new IncomingForm({

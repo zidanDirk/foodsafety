@@ -1,51 +1,128 @@
 // 异步任务处理器 - 整合OCR和AI分析
 import { DatabaseManager, Task } from './database'
+import { memoryStorage } from './memory-storage'
 import { OCRService } from './ocr-service'
 import { AIAnalysisService } from './ai-analysis-service'
 
+// 检查是否使用数据库
+let useDatabase = false
+
 export class TaskProcessor {
+  // 初始化存储方式
+  static async initializeStorage(): Promise<boolean> {
+    try {
+      const databaseUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL
+      if (!databaseUrl) {
+        console.warn('数据库未配置，使用内存存储')
+        useDatabase = false
+        return true
+      }
+
+      // 尝试连接数据库
+      const isConnected = await DatabaseManager.checkConnection()
+      if (isConnected) {
+        useDatabase = true
+        console.log('使用数据库存储')
+        return true
+      } else {
+        console.warn('数据库连接失败，降级到内存存储')
+        useDatabase = false
+        return true
+      }
+    } catch (error) {
+      console.error('存储初始化失败:', error)
+      useDatabase = false
+      return true // 降级到内存存储总是可用的
+    }
+  }
+
   // 创建任务
   static async createTask(taskId: string, fileInfo: any): Promise<Task | null> {
     try {
-      // 检查数据库连接
-      if (!process.env.DATABASE_URL) {
-        console.warn('数据库未配置，使用内存存储')
-        // 可以在这里实现内存存储的降级方案
-        throw new Error('数据库未配置')
+      // 确保存储已初始化
+      if (useDatabase === undefined) {
+        await this.initializeStorage()
       }
 
-      const task = await DatabaseManager.createTask(taskId, fileInfo)
-      if (task) {
-        console.log(`任务创建成功: ${taskId}`)
+      if (useDatabase) {
+        const task = await DatabaseManager.createTask(taskId, fileInfo)
+        if (task) {
+          console.log(`数据库 - 任务创建成功: ${taskId}`)
+          return task
+        } else {
+          // 数据库失败，降级到内存存储
+          console.warn('数据库创建任务失败，降级到内存存储')
+          useDatabase = false
+        }
       }
+
+      // 使用内存存储
+      const task = memoryStorage.createTask(taskId, fileInfo)
       return task
     } catch (error) {
       console.error(`创建任务失败: ${taskId}`, error)
-      return null
+      // 最后的降级方案
+      try {
+        return memoryStorage.createTask(taskId, fileInfo)
+      } catch (fallbackError) {
+        console.error('内存存储也失败了:', fallbackError)
+        return null
+      }
     }
   }
 
   // 更新任务状态
   static async updateTask(taskId: string, updates: Partial<Task>): Promise<Task | null> {
     try {
-      const task = await DatabaseManager.updateTask(taskId, updates)
-      if (task) {
-        console.log(`任务更新: ${taskId}, 状态: ${task.status}, 进度: ${task.progress}%`)
+      if (useDatabase) {
+        const task = await DatabaseManager.updateTask(taskId, updates)
+        if (task) {
+          console.log(`数据库 - 任务更新: ${taskId}, 状态: ${task.status}, 进度: ${task.progress}%`)
+          return task
+        } else {
+          // 降级到内存存储
+          console.warn('数据库更新失败，尝试内存存储')
+        }
       }
-      return task
+
+      // 使用内存存储
+      return memoryStorage.updateTask(taskId, updates)
     } catch (error) {
       console.error(`更新任务失败: ${taskId}`, error)
-      return null
+      // 降级到内存存储
+      try {
+        return memoryStorage.updateTask(taskId, updates)
+      } catch (fallbackError) {
+        console.error('内存存储更新也失败了:', fallbackError)
+        return null
+      }
     }
   }
 
   // 获取任务
   static async getTask(taskId: string): Promise<Task | null> {
     try {
-      return await DatabaseManager.getTask(taskId)
+      if (useDatabase) {
+        const task = await DatabaseManager.getTask(taskId)
+        if (task) {
+          return task
+        } else {
+          // 尝试内存存储
+          console.warn('数据库中未找到任务，尝试内存存储')
+        }
+      }
+
+      // 使用内存存储
+      return memoryStorage.getTask(taskId)
     } catch (error) {
       console.error(`获取任务失败: ${taskId}`, error)
-      return null
+      // 降级到内存存储
+      try {
+        return memoryStorage.getTask(taskId)
+      } catch (fallbackError) {
+        console.error('内存存储获取也失败了:', fallbackError)
+        return null
+      }
     }
   }
 

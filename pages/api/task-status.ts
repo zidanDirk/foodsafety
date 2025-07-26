@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { TaskProcessor } from '@/lib/task-manager'
-import { initializeDatabase } from '@/lib/database'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -8,8 +7,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // 确保数据库已初始化
-    await initializeDatabase()
+    // 初始化存储（数据库或内存）
+    await TaskProcessor.initializeStorage()
 
     const { taskId } = req.query
 

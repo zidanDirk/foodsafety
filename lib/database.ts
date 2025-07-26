@@ -2,8 +2,15 @@
 import { sql } from '@vercel/postgres'
 
 // 确保数据库连接配置
-if (!process.env.DATABASE_URL) {
-  console.warn('DATABASE_URL 环境变量未设置，某些功能可能无法正常工作')
+// @vercel/postgres 需要 POSTGRES_URL 环境变量
+if (!process.env.POSTGRES_URL && !process.env.DATABASE_URL) {
+  console.warn('数据库连接字符串未设置，某些功能可能无法正常工作')
+}
+
+// 如果只有 DATABASE_URL，设置 POSTGRES_URL
+if (process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
+  process.env.POSTGRES_URL = process.env.DATABASE_URL
+  console.log('已将 DATABASE_URL 设置为 POSTGRES_URL')
 }
 
 export interface Task {
@@ -25,9 +32,32 @@ export interface Task {
 }
 
 export class DatabaseManager {
+  // 检查数据库连接
+  static async checkConnection() {
+    try {
+      const databaseUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL
+      if (!databaseUrl) {
+        throw new Error('数据库连接字符串未配置')
+      }
+
+      // 简单的连接测试
+      await sql`SELECT 1 as test`
+      return true
+    } catch (error) {
+      console.error('数据库连接检查失败:', error)
+      return false
+    }
+  }
+
   // 初始化数据库表
   static async initializeTables() {
     try {
+      // 首先检查连接
+      const isConnected = await this.checkConnection()
+      if (!isConnected) {
+        throw new Error('数据库连接失败')
+      }
+
       await sql`
         CREATE TABLE IF NOT EXISTS tasks (
           id VARCHAR(255) PRIMARY KEY,
@@ -43,16 +73,16 @@ export class DatabaseManager {
           completed_at TIMESTAMP WITH TIME ZONE
         )
       `
-      
+
       // 创建索引
       await sql`
         CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)
       `
-      
+
       await sql`
         CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)
       `
-      
+
       console.log('数据库表初始化成功')
       return true
     } catch (error) {

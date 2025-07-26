@@ -20,10 +20,13 @@ export interface AppConfig {
 }
 
 export function getAppConfig(): AppConfig {
+  // 支持 POSTGRES_URL 和 DATABASE_URL
+  const databaseUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL
+
   const config: AppConfig = {
     database: {
-      url: process.env.DATABASE_URL || null,
-      isConfigured: !!process.env.DATABASE_URL
+      url: databaseUrl || null,
+      isConfigured: !!databaseUrl
     },
     ocr: {
       baiduApiKey: process.env.BAIDU_OCR_API_KEY || null,
@@ -49,7 +52,7 @@ export function validateConfig(): { isValid: boolean; errors: string[] } {
 
   // 检查数据库配置
   if (!config.database.isConfigured) {
-    errors.push('DATABASE_URL 环境变量未配置')
+    errors.push('数据库连接字符串未配置 (需要 POSTGRES_URL 或 DATABASE_URL)')
   }
 
   // 检查 OCR 配置
