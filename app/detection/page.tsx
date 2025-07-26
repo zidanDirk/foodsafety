@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-// import ImageCompressor from '@/components/ImageCompressor'
+import ImageCompressor from '@/components/ImageCompressor'
 
 export default function DetectionPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -29,12 +29,12 @@ export default function DetectionPage() {
 
     setOriginalFile(file)
 
-    // 检查是否需要压缩
+    // 始终设置选择的文件，但检查是否需要压缩
+    setSelectedFile(file)
+
     if (file.size > 5 * 1024 * 1024) {
       setNeedsCompression(true)
-      setSelectedFile(null) // 清空已选择的文件，等待压缩
     } else {
-      setSelectedFile(file)
       setNeedsCompression(false)
     }
 
@@ -52,6 +52,13 @@ export default function DetectionPage() {
     setCompressionInfo(
       `压缩完成：${formatFileSize(info.originalSize)} → ${formatFileSize(info.newSize)}`
     )
+
+    // 更新预览
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setPreview(e.target?.result as string)
+    }
+    reader.readAsDataURL(compressedFile)
   }
 
   const handleCompressionError = (error: string) => {
@@ -76,6 +83,12 @@ export default function DetectionPage() {
 
   const handleUpload = async () => {
     if (!selectedFile) return
+
+    // 检查文件大小是否符合要求
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      setError('文件大小超过 5MB，请先压缩图片')
+      return
+    }
 
     setUploading(true)
     setError(null)
@@ -159,7 +172,24 @@ export default function DetectionPage() {
                 {/* 压缩组件 - 暂时禁用 */}
                 {needsCompression && originalFile && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                    <p className="text-yellow-800">图片大于 5MB，需要压缩。压缩功能开发中...</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-medium text-yellow-800">图片需要压缩</h3>
+                        <p className="text-sm text-yellow-700">
+                          当前大小：{formatFileSize(originalFile.size)}，需要压缩到 5MB 以下
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          // 简单的压缩逻辑 - 直接设置为可用
+                          setNeedsCompression(false)
+                          setCompressionInfo('已跳过压缩（开发模式）')
+                        }}
+                        className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
+                      >
+                        跳过压缩
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -196,10 +226,10 @@ export default function DetectionPage() {
                 
                 <button
                   onClick={handleUpload}
-                  disabled={uploading}
+                  disabled={uploading || needsCompression}
                   className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {uploading ? '正在分析...' : '开始分析'}
+                  {uploading ? '正在分析...' : needsCompression ? '请先压缩图片' : '开始分析'}
                 </button>
               </div>
             )}
