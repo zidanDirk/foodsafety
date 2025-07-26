@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 export default function DetectionPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
@@ -43,12 +44,37 @@ export default function DetectionPage() {
     }
   }
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!selectedFile) return
-    
-    // 模拟跳转到结果页面
-    const mockTaskId = `task_${Date.now()}_demo`
-    router.push(`/results?taskId=${mockTaskId}`)
+
+    setUploading(true)
+    setError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('image', selectedFile)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('上传失败')
+      }
+
+      const result = await response.json()
+
+      if (result.taskId) {
+        router.push(`/results?taskId=${result.taskId}`)
+      } else {
+        throw new Error('服务器响应异常')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '上传失败，请重试')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const resetFile = () => {
@@ -127,9 +153,10 @@ export default function DetectionPage() {
                 
                 <button
                   onClick={handleUpload}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={uploading}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  开始分析
+                  {uploading ? '正在分析...' : '开始分析'}
                 </button>
               </div>
             )}

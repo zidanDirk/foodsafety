@@ -1,11 +1,79 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function ResultsPage() {
+interface TaskResult {
+  taskId: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  progress: number
+  processingStep: string
+  result?: {
+    ocrData: {
+      rawText: string
+      extractedIngredients: {
+        ingredients: Array<{ name: string; position: number }>
+        hasIngredients: boolean
+        extractionConfidence: number
+      }
+    }
+    healthAnalysis: {
+      overallScore: number
+      ingredientScores: Array<{
+        ingredient: string
+        score: number
+        reason: string
+        category: string
+        healthImpact: string
+      }>
+      analysisReport: string
+      recommendations: string
+    }
+  }
+  error?: string
+}
+
+function ResultsPageContent() {
+  const [taskResult, setTaskResult] = useState<TaskResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const taskId = searchParams.get('taskId')
 
-  // 模拟分析结果
+  useEffect(() => {
+    if (!taskId) {
+      setError('缺少任务ID')
+      setLoading(false)
+      return
+    }
+
+    const pollTaskStatus = async () => {
+      try {
+        const response = await fetch(`/api/task-status?taskId=${taskId}`)
+
+        if (!response.ok) {
+          throw new Error('获取任务状态失败')
+        }
+
+        const result: TaskResult = await response.json()
+        setTaskResult(result)
+
+        if (result.status === 'completed' || result.status === 'failed') {
+          setLoading(false)
+        } else {
+          setTimeout(pollTaskStatus, 2000)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '获取结果失败')
+        setLoading(false)
+      }
+    }
+
+    pollTaskStatus()
+  }, [taskId])
+
+  // 模拟分析结果（作为降级方案）
   const mockResult = {
     ocrData: {
       rawText: '配料：小麦粉、白砂糖、植物油、鸡蛋、食用盐',
@@ -54,6 +122,68 @@ export default function ResultsPage() {
     return 'bg-red-100'
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">正在分析中...</h2>
+          {taskResult && (
+            <div className="space-y-2">
+              <p className="text-gray-600">{taskResult.processingStep}</p>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${taskResult.progress}%` }}
+                ></div>
+              </div>
+              <p className="text-sm text-gray-500">{taskResult.progress}%</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !taskResult) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+          <div className="text-red-500 text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">分析失败</h2>
+          <p className="text-gray-600 mb-4">{error || '未知错误'}</p>
+          <button
+            onClick={() => router.push('/detection')}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            重新检测
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (taskResult.status === 'failed') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+          <div className="text-red-500 text-4xl mb-4">❌</div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">分析失败</h2>
+          <p className="text-gray-600 mb-4">{taskResult.error || '处理过程中出现错误'}</p>
+          <button
+            onClick={() => router.push('/detection')}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            重新检测
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // 使用真实结果或降级到模拟结果
+  const displayResult = taskResult.result || mockResult
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-16">
@@ -63,8 +193,8 @@ export default function ResultsPage() {
               分析结果
             </h1>
             <div className="flex items-center justify-center space-x-4">
-              <div className={`text-4xl font-bold ${getScoreColor(mockResult.healthAnalysis.overallScore)}`}>
-                {mockResult.healthAnalysis.overallScore}/10
+              <div className={`text-4xl font-bold ${getScoreColor(displayResult.healthAnalysis.overallScore)}`}>
+                {displayResult.healthAnalysis.overallScore}/10
               </div>
               <div className="text-gray-600">总体健康度评分</div>
             </div>
@@ -73,10 +203,10 @@ export default function ResultsPage() {
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">识别到的配料</h2>
             <div className="bg-gray-50 p-4 rounded-lg mb-4">
-              <p className="text-gray-700">{mockResult.ocrData.rawText}</p>
+              <p className="text-gray-700">{displayResult.ocrData.rawText}</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {mockResult.ocrData.extractedIngredients.ingredients.map((ingredient, index) => (
+              {displayResult.ocrData.extractedIngredients.ingredients.map((ingredient, index) => (
                 <div key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
                   {ingredient.name}
                 </div>
@@ -87,7 +217,7 @@ export default function ResultsPage() {
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">配料健康度评分</h2>
             <div className="space-y-4">
-              {mockResult.healthAnalysis.ingredientScores.map((item, index) => (
+              {displayResult.healthAnalysis.ingredientScores.map((item, index) => (
                 <div key={index} className="border rounded-lg p-4">
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-semibold text-gray-900">{item.ingredient}</h3>
@@ -113,12 +243,12 @@ export default function ResultsPage() {
 
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">分析报告</h2>
-            <p className="text-gray-700">{mockResult.healthAnalysis.analysisReport}</p>
+            <p className="text-gray-700">{displayResult.healthAnalysis.analysisReport}</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">健康建议</h2>
-            <p className="text-gray-700 whitespace-pre-line">{mockResult.healthAnalysis.recommendations}</p>
+            <p className="text-gray-700 whitespace-pre-line">{displayResult.healthAnalysis.recommendations}</p>
           </div>
 
           <div className="text-center space-x-4">
@@ -138,5 +268,20 @@ export default function ResultsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-900">加载中...</h2>
+        </div>
+      </div>
+    }>
+      <ResultsPageContent />
+    </Suspense>
   )
 }
