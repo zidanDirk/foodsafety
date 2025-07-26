@@ -65,7 +65,7 @@ export class AIAnalysisService {
 
   // 从OCR原始文本构建分析提示词
   private static buildAnalysisPromptFromText(rawText: string): string {
-    return `请作为一名专业的营养师，从以下OCR识别的文本中提取配料信息并分析健康度：
+    return `请作为一名专业的营养师，从以下OCR识别的文本中提取配料信息并分析健康度,打分需更加严格，要指出配料中的有害添加剂：
 
 OCR识别文本：
 ${rawText}

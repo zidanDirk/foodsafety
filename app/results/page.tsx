@@ -37,9 +37,10 @@ function ResultsPageContent() {
   const [taskResult, setTaskResult] = useState<TaskResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showIngredients, setShowIngredients] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const taskId = searchParams.get('taskId')
+  const taskId = searchParams?.get('taskId')
 
   useEffect(() => {
     if (!taskId) {
@@ -200,19 +201,7 @@ function ResultsPageContent() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">识别到的配料</h2>
-            <div className="bg-gray-50 p-4 rounded-lg mb-4">
-              <p className="text-gray-700">{displayResult.ocrData.rawText}</p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {displayResult.ocrData.extractedIngredients.ingredients.map((ingredient, index) => (
-                <div key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
-                  {ingredient.name}
-                </div>
-              ))}
-            </div>
-          </div>
+
 
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">配料健康度评分</h2>
@@ -249,6 +238,55 @@ function ResultsPageContent() {
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">健康建议</h2>
             <p className="text-gray-700 whitespace-pre-line">{displayResult.healthAnalysis.recommendations}</p>
+          </div>
+
+          {/* 识别到的配料 - 收起展示 */}
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <button
+              onClick={() => setShowIngredients(!showIngredients)}
+              className="w-full flex items-center justify-between text-left hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+            >
+              <h2 className="text-xl font-semibold text-gray-900">识别到的配料</h2>
+              <div className="flex items-center">
+                <span className="text-sm text-gray-500 mr-2">
+                  {showIngredients ? '收起' : '展开查看'}
+                </span>
+                <svg
+                  className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${
+                    showIngredients ? 'rotate-180' : ''
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </div>
+            </button>
+
+            {showIngredients && (
+              <div className="mt-4 space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">OCR识别原文：</h3>
+                  <p className="text-gray-700 text-sm">{displayResult.ocrData.rawText}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">提取的配料：</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {displayResult.ocrData.extractedIngredients.ingredients.map((ingredient, index) => (
+                      <div key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                        {ingredient.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="text-center space-x-4">
