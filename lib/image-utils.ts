@@ -13,7 +13,7 @@ export class ImageUtils {
       maxWidth = 1920,
       maxHeight = 1080,
       quality = 0.8,
-      maxSizeKB = 5 * 1024 // 5MB
+      maxSizeKB = 4 * 1024 // 4MB，留一些余量
     } = options
 
     return new Promise((resolve, reject) => {
@@ -24,7 +24,7 @@ export class ImageUtils {
       img.onload = () => {
         try {
           // 计算新的尺寸
-          const { width, height } = this.calculateNewDimensions(
+          const { width, height } = ImageUtils.calculateNewDimensions(
             img.width,
             img.height,
             maxWidth,
@@ -52,9 +52,9 @@ export class ImageUtils {
               // 检查压缩后的大小
               if (blob.size > maxSizeKB * 1024) {
                 // 如果还是太大，降低质量重试
-                const newQuality = Math.max(0.1, quality * 0.8)
+                const newQuality = Math.max(0.1, quality * 0.7)
                 if (newQuality < quality) {
-                  this.compressImage(file, { ...options, quality: newQuality })
+                  ImageUtils.compressImage(file, { ...options, quality: newQuality })
                     .then(resolve)
                     .catch(reject)
                   return
@@ -87,7 +87,7 @@ export class ImageUtils {
   }
 
   // 计算新的图片尺寸
-  private static calculateNewDimensions(
+  static calculateNewDimensions(
     originalWidth: number,
     originalHeight: number,
     maxWidth: number,
@@ -155,7 +155,7 @@ export class ImageUtils {
   // 自动压缩（如果需要）
   static async autoCompress(file: File): Promise<{ file: File; compressed: boolean; originalSize: number; newSize: number }> {
     const originalSize = file.size
-    const maxSizeKB = 5 * 1024 // 5MB
+    const maxSizeKB = 4.5 * 1024 // 4.5MB，留一些余量
 
     if (!this.needsCompression(file, maxSizeKB)) {
       return {
@@ -167,10 +167,25 @@ export class ImageUtils {
     }
 
     try {
+      // 根据文件大小选择不同的压缩策略
+      let quality = 0.8
+      let maxWidth = 1920
+      let maxHeight = 1080
+
+      if (file.size > 20 * 1024 * 1024) { // 大于20MB
+        quality = 0.5
+        maxWidth = 1280
+        maxHeight = 720
+      } else if (file.size > 10 * 1024 * 1024) { // 大于10MB
+        quality = 0.6
+        maxWidth = 1600
+        maxHeight = 900
+      }
+
       const compressedFile = await this.compressImage(file, {
-        maxWidth: 1920,
-        maxHeight: 1080,
-        quality: 0.8,
+        maxWidth,
+        maxHeight,
+        quality,
         maxSizeKB
       })
 

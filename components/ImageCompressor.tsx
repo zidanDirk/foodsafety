@@ -1,0 +1,163 @@
+'use client'
+
+import { useState } from 'react'
+
+interface ImageCompressorProps {
+  file: File
+  onCompressed: (compressedFile: File, info: { originalSize: number; newSize: number }) => void
+  onError: (error: string) => void
+}
+
+export default function ImageCompressor({ file, onCompressed, onError }: ImageCompressorProps) {
+  const [compressing, setCompressing] = useState(false)
+  const [progress, setProgress] = useState(0)
+
+  const compressImage = async () => {
+    if (file.size <= 5 * 1024 * 1024) {
+      // 文件已经小于5MB，无需压缩
+      onCompressed(file, { originalSize: file.size, newSize: file.size })
+      return
+    }
+
+    setCompressing(true)
+    setProgress(10)
+
+    try {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const img = new Image()
+
+      img.onload = () => {
+        try {
+          setProgress(30)
+
+          // 计算新尺寸
+          let { width, height } = calculateNewDimensions(img.width, img.height)
+          
+          canvas.width = width
+          canvas.height = height
+
+          if (!ctx) {
+            throw new Error('无法获取 Canvas 上下文')
+          }
+
+          setProgress(50)
+
+          // 绘制图片
+          ctx.drawImage(img, 0, 0, width, height)
+
+          setProgress(70)
+
+          // 转换为 Blob，使用较低的质量
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                onError('图片压缩失败')
+                return
+              }
+
+              setProgress(90)
+
+              // 创建新的 File 对象
+              const compressedFile = new File([blob], file.name, {
+                type: file.type,
+                lastModified: Date.now()
+              })
+
+              setProgress(100)
+              setCompressing(false)
+
+              onCompressed(compressedFile, {
+                originalSize: file.size,
+                newSize: compressedFile.size
+              })
+            },
+            file.type,
+            0.6 // 60% 质量
+          )
+        } catch (error) {
+          setCompressing(false)
+          onError('图片处理失败')
+        }
+      }
+
+      img.onerror = () => {
+        setCompressing(false)
+        onError('图片加载失败')
+      }
+
+      setProgress(20)
+      img.src = URL.createObjectURL(file)
+    } catch (error) {
+      setCompressing(false)
+      onError('图片压缩失败')
+    }
+  }
+
+  const calculateNewDimensions = (originalWidth: number, originalHeight: number) => {
+    const maxWidth = 1600
+    const maxHeight = 1200
+    
+    let width = originalWidth
+    let height = originalHeight
+
+    if (width > maxWidth) {
+      height = (height * maxWidth) / width
+      width = maxWidth
+    }
+
+    if (height > maxHeight) {
+      width = (width * maxHeight) / height
+      height = maxHeight
+    }
+
+    return { width: Math.round(width), height: Math.round(height) }
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  if (!compressing) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-yellow-800">图片需要压缩</h3>
+            <p className="text-sm text-yellow-700">
+              当前大小：{formatFileSize(file.size)}，需要压缩到 5MB 以下
+            </p>
+          </div>
+          <button
+            onClick={compressImage}
+            className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
+          >
+            开始压缩
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+      <div className="flex items-center space-x-3">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+        <div className="flex-1">
+          <h3 className="text-sm font-medium text-blue-800">正在压缩图片...</h3>
+          <div className="w-full bg-blue-200 rounded-full h-2 mt-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+          <p className="text-xs text-blue-600 mt-1">{progress}%</p>
+        </div>
+      </div>
+    </div>
+  )
+}

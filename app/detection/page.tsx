@@ -2,12 +2,14 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+// import ImageCompressor from '@/components/ImageCompressor'
 
 export default function DetectionPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [originalFile, setOriginalFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [compressing, setCompressing] = useState(false)
+  const [needsCompression, setNeedsCompression] = useState(false)
   const [compressionInfo, setCompressionInfo] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -16,6 +18,7 @@ export default function DetectionPage() {
   const handleFileSelect = (file: File) => {
     setError(null)
     setCompressionInfo(null)
+    setNeedsCompression(false)
 
     // 验证文件类型
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
@@ -24,13 +27,16 @@ export default function DetectionPage() {
       return
     }
 
-    // 验证文件大小 (5MB - Netlify 限制)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('文件大小不能超过 5MB（平台限制）')
-      return
-    }
+    setOriginalFile(file)
 
-    setSelectedFile(file)
+    // 检查是否需要压缩
+    if (file.size > 5 * 1024 * 1024) {
+      setNeedsCompression(true)
+      setSelectedFile(null) // 清空已选择的文件，等待压缩
+    } else {
+      setSelectedFile(file)
+      setNeedsCompression(false)
+    }
 
     // 创建预览
     const reader = new FileReader()
@@ -38,6 +44,27 @@ export default function DetectionPage() {
       setPreview(e.target?.result as string)
     }
     reader.readAsDataURL(file)
+  }
+
+  const handleCompressed = (compressedFile: File, info: { originalSize: number; newSize: number }) => {
+    setSelectedFile(compressedFile)
+    setNeedsCompression(false)
+    setCompressionInfo(
+      `压缩完成：${formatFileSize(info.originalSize)} → ${formatFileSize(info.newSize)}`
+    )
+  }
+
+  const handleCompressionError = (error: string) => {
+    setError(error)
+    setNeedsCompression(false)
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,12 +135,13 @@ export default function DetectionPage() {
                 className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <div className="text-4xl mb-4">��</div>
+                <div className="text-4xl mb-4">📷</div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   选择或拖拽图片
                 </h3>
                 <p className="text-gray-600 mb-4">
-                  支持 JPEG、PNG、GIF、WebP 格式，最大 5MB
+                  支持 JPEG、PNG、GIF、WebP 格式<br/>
+                  大于 5MB 的图片将自动压缩
                 </p>
                 <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                   选择文件
@@ -128,6 +156,13 @@ export default function DetectionPage() {
               </div>
             ) : (
               <div className="space-y-4">
+                {/* 压缩组件 - 暂时禁用 */}
+                {needsCompression && originalFile && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                    <p className="text-yellow-800">图片大于 5MB，需要压缩。压缩功能开发中...</p>
+                  </div>
+                )}
+
                 <div className="relative">
                   <img
                     src={preview!}
@@ -147,8 +182,13 @@ export default function DetectionPage() {
                     <div>
                       <p className="font-semibold text-gray-900">{selectedFile.name}</p>
                       <p className="text-sm text-gray-600">
-                        {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                        {formatFileSize(selectedFile.size)}
                       </p>
+                      {compressionInfo && (
+                        <p className="text-xs text-green-600 mt-1">
+                          ✅ {compressionInfo}
+                        </p>
+                      )}
                     </div>
                     <div className="text-green-500">✓</div>
                   </div>
@@ -156,10 +196,10 @@ export default function DetectionPage() {
                 
                 <button
                   onClick={handleUpload}
-                  disabled={uploading || compressing}
+                  disabled={uploading}
                   className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {compressing ? '正在压缩图片...' : uploading ? '正在分析...' : '开始分析'}
+                  {uploading ? '正在分析...' : '开始分析'}
                 </button>
               </div>
             )}
