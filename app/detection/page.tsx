@@ -11,6 +11,7 @@ export default function DetectionPage() {
   const [uploading, setUploading] = useState(false)
   const [needsCompression, setNeedsCompression] = useState(false)
   const [compressionInfo, setCompressionInfo] = useState<string | null>(null)
+  const [compressionProgress, setCompressionProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
@@ -29,29 +30,48 @@ export default function DetectionPage() {
 
     setOriginalFile(file)
 
-    // 创建预览
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setPreview(e.target?.result as string)
-    }
-    reader.readAsDataURL(file)
+    // 检查是否需要压缩
+    const needsCompress = file.size > 5 * 1024 * 1024
 
-    // 检查是否需要压缩并自动处理
-    if (file.size > 5 * 1024 * 1024) {
+    if (needsCompress) {
       setNeedsCompression(true)
-      setCompressionInfo('图片较大，正在自动压缩...')
-
-      try {
-        // 自动开始压缩
-        await autoCompressImage(file)
-      } catch (error) {
-        setError('图片压缩失败，请重试')
-        setNeedsCompression(false)
-      }
+      setCompressionInfo('正在准备压缩...')
     } else {
       setSelectedFile(file)
+    }
+
+    // 并行处理：同时创建预览和开始压缩
+    const tasks = []
+
+    // 任务1：创建预览（总是需要）
+    tasks.push(createPreview(file))
+
+    // 任务2：压缩图片（如果需要）
+    if (needsCompress) {
+      tasks.push(autoCompressImage(file))
+    }
+
+    try {
+      await Promise.all(tasks)
+      if (!needsCompress) {
+        setNeedsCompression(false)
+      }
+    } catch (error) {
+      setError('图片处理失败，请重试')
       setNeedsCompression(false)
     }
+  }
+
+  // 独立的预览创建函数
+  const createPreview = (file: File): Promise<void> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setPreview(e.target?.result as string)
+        resolve()
+      }
+      reader.readAsDataURL(file)
+    })
   }
 
   const handleCompressed = (compressedFile: File, info: { originalSize: number; newSize: number }) => {
@@ -82,8 +102,37 @@ export default function DetectionPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  // 自动压缩图片函数（递归压缩直到满足大小要求）
-  const autoCompressImage = async (file: File, quality: number = 0.8): Promise<void> => {
+  // 智能压缩参数预估
+  const estimateCompressionParams = (fileSize: number) => {
+    const targetSize = 4.5 * 1024 * 1024 // 4.5MB
+    const compressionRatio = targetSize / fileSize
+
+    let quality = 0.8
+    let maxWidth = 1600
+    let maxHeight = 1200
+
+    if (compressionRatio < 0.1) { // 需要90%+压缩
+      quality = 0.4
+      maxWidth = 1024
+      maxHeight = 768
+    } else if (compressionRatio < 0.3) { // 需要70%+压缩
+      quality = 0.5
+      maxWidth = 1280
+      maxHeight = 720
+    } else if (compressionRatio < 0.5) { // 需要50%+压缩
+      quality = 0.6
+      maxWidth = 1400
+      maxHeight = 900
+    }
+
+    return { quality, maxWidth, maxHeight }
+  }
+
+  // 优化的自动压缩函数（减少递归）
+  const autoCompressImage = async (file: File): Promise<void> => {
+    setCompressionProgress(10)
+    setCompressionInfo('正在分析图片...')
+
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
@@ -91,21 +140,16 @@ export default function DetectionPage() {
 
       img.onload = () => {
         try {
-          // 根据文件大小动态调整尺寸
-          let maxWidth = 1600
-          let maxHeight = 1200
+          setCompressionProgress(30)
+          setCompressionInfo('正在压缩图片...')
 
-          if (file.size > 20 * 1024 * 1024) { // 大于20MB
-            maxWidth = 1280
-            maxHeight = 720
-          } else if (file.size > 10 * 1024 * 1024) { // 大于10MB
-            maxWidth = 1400
-            maxHeight = 900
-          }
+          // 智能预估压缩参数
+          const { quality, maxWidth, maxHeight } = estimateCompressionParams(file.size)
 
           // 计算新尺寸
           const { width, height } = calculateNewDimensions(img.width, img.height, maxWidth, maxHeight)
 
+          setCompressionProgress(50)
           canvas.width = width
           canvas.height = height
 
@@ -114,6 +158,7 @@ export default function DetectionPage() {
           }
 
           // 绘制图片
+          setCompressionProgress(70)
           ctx.drawImage(img, 0, 0, width, height)
 
           // 转换为 Blob
@@ -124,44 +169,42 @@ export default function DetectionPage() {
                 return
               }
 
-              // 检查压缩后的大小
-              if (blob.size > 4.5 * 1024 * 1024 && quality > 0.3) {
-                // 如果还是太大且质量还可以降低，递归压缩
-                setCompressionInfo(`正在进一步压缩... (当前: ${formatFileSize(blob.size)})`)
-                try {
-                  await autoCompressImage(file, quality * 0.7)
-                  resolve()
-                } catch (error) {
-                  reject(error)
-                }
+              // 如果第一次压缩还是太大，尝试更激进的压缩
+              if (blob.size > 4.5 * 1024 * 1024) {
+                setCompressionInfo('正在进一步优化...')
+
+                // 更激进的压缩参数
+                const aggressiveQuality = Math.max(0.3, quality * 0.5)
+                const smallerWidth = Math.round(width * 0.8)
+                const smallerHeight = Math.round(height * 0.8)
+
+                // 重新绘制更小尺寸
+                canvas.width = smallerWidth
+                canvas.height = smallerHeight
+                ctx.clearRect(0, 0, smallerWidth, smallerHeight)
+                ctx.drawImage(img, 0, 0, smallerWidth, smallerHeight)
+
+                canvas.toBlob(
+                  (finalBlob) => {
+                    if (!finalBlob) {
+                      reject(new Error('最终压缩失败'))
+                      return
+                    }
+
+                    completeCompression(finalBlob, file, resolve)
+                  },
+                  file.type,
+                  aggressiveQuality
+                )
                 return
               }
 
-              // 创建新的 File 对象
-              const compressedFile = new File([blob], file.name, {
-                type: file.type,
-                lastModified: Date.now()
-              })
-
-              // 更新状态
-              setSelectedFile(compressedFile)
-              setNeedsCompression(false)
-              setCompressionInfo(
-                `✅ 自动压缩完成：${formatFileSize(file.size)} → ${formatFileSize(compressedFile.size)}`
-              )
-
-              // 更新预览
-              const reader = new FileReader()
-              reader.onload = (e) => {
-                setPreview(e.target?.result as string)
-              }
-              reader.readAsDataURL(compressedFile)
-
-              resolve()
+              completeCompression(blob, file, resolve)
             },
             file.type,
             quality
           )
+
         } catch (error) {
           reject(error)
         }
@@ -173,6 +216,38 @@ export default function DetectionPage() {
 
       img.src = URL.createObjectURL(file)
     })
+  }
+
+  // 压缩完成处理函数
+  const completeCompression = (blob: Blob, originalFile: File, resolve: () => void) => {
+    setCompressionProgress(90)
+
+    // 创建新的 File 对象
+    const compressedFile = new File([blob], originalFile.name, {
+      type: originalFile.type,
+      lastModified: Date.now()
+    })
+
+    // 更新状态
+    setSelectedFile(compressedFile)
+    setNeedsCompression(false)
+    setCompressionProgress(100)
+
+    const compressionRatio = ((originalFile.size - compressedFile.size) / originalFile.size * 100).toFixed(1)
+    setCompressionInfo(
+      `✅ 压缩完成：${formatFileSize(originalFile.size)} → ${formatFileSize(compressedFile.size)} (节省${compressionRatio}%)`
+    )
+
+    // 异步更新预览（不阻塞主流程）
+    setTimeout(() => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(compressedFile)
+    }, 0)
+
+    resolve()
   }
 
   // 计算新的图片尺寸
@@ -300,8 +375,14 @@ export default function DetectionPage() {
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <div className="flex-1">
                         <h3 className="text-sm font-medium text-blue-800">正在自动压缩图片...</h3>
+                        <div className="w-full bg-blue-200 rounded-full h-2 mt-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${compressionProgress}%` }}
+                          ></div>
+                        </div>
                         <p className="text-xs text-blue-600 mt-1">
-                          原始大小：{formatFileSize(originalFile.size)}，正在优化到 5MB 以下
+                          {compressionInfo || `原始大小：${formatFileSize(originalFile.size)}`} ({compressionProgress}%)
                         </p>
                       </div>
                     </div>
