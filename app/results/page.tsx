@@ -1,7 +1,7 @@
 // app/results/page.tsx
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -38,7 +38,7 @@ interface TaskResult {
   error?: string
 }
 
-export default function ResultsPage() {
+function ResultsPageContent() {
   const [taskResult, setTaskResult] = useState<TaskResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -390,5 +390,20 @@ export default function ResultsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <Card className="text-center max-w-md w-full">
+          <LoadingSpinner size="lg" className="mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">加载中...</h2>
+        </Card>
+      </div>
+    }>
+      <ResultsPageContent />
+    </Suspense>
   )
 }
