@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { AccessibilityProvider } from '@/components/AccessibilityHelper'
+import { AccessibilityControls } from '@/components/AccessibilityHelper'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -17,7 +20,12 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className={inter.className}>
-        {children}
+        <ErrorBoundary>
+          <AccessibilityProvider>
+            {children}
+            <AccessibilityControls />
+          </AccessibilityProvider>
+        </ErrorBoundary>
       </body>
     </html>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 interface ImageCompressorProps {
   file: File
@@ -11,6 +11,7 @@ interface ImageCompressorProps {
 export default function ImageCompressor({ file, onCompressed, onError }: ImageCompressorProps) {
   const [compressing, setCompressing] = useState(false)
   const [progress, setProgress] = useState(0)
+  const compressionCancelled = useRef(false)
 
   const compressImage = async () => {
     if (file.size <= 5 * 1024 * 1024) {
@@ -19,15 +20,22 @@ export default function ImageCompressor({ file, onCompressed, onError }: ImageCo
       return
     }
 
+    compressionCancelled.current = false
     setCompressing(true)
     setProgress(10)
 
     try {
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        throw new Error('无法获取 Canvas 上下文')
+      }
+      
       const img = new Image()
 
       img.onload = () => {
+        if (compressionCancelled.current) return
+        
         try {
           setProgress(30)
 
@@ -36,10 +44,6 @@ export default function ImageCompressor({ file, onCompressed, onError }: ImageCo
           
           canvas.width = width
           canvas.height = height
-
-          if (!ctx) {
-            throw new Error('无法获取 Canvas 上下文')
-          }
 
           setProgress(50)
 
@@ -51,6 +55,8 @@ export default function ImageCompressor({ file, onCompressed, onError }: ImageCo
           // 转换为 Blob，使用较低的质量
           canvas.toBlob(
             (blob) => {
+              if (compressionCancelled.current) return
+              
               if (!blob) {
                 onError('图片压缩失败')
                 return
@@ -73,7 +79,7 @@ export default function ImageCompressor({ file, onCompressed, onError }: ImageCo
               })
             },
             file.type,
-            0.6 // 60% 质量
+            0.7 // 70% 质量
           )
         } catch (error) {
           setCompressing(false)
@@ -82,8 +88,10 @@ export default function ImageCompressor({ file, onCompressed, onError }: ImageCo
       }
 
       img.onerror = () => {
-        setCompressing(false)
-        onError('图片加载失败')
+        if (!compressionCancelled.current) {
+          setCompressing(false)
+          onError('图片加载失败')
+        }
       }
 
       setProgress(20)
@@ -95,8 +103,8 @@ export default function ImageCompressor({ file, onCompressed, onError }: ImageCo
   }
 
   const calculateNewDimensions = (originalWidth: number, originalHeight: number) => {
-    const maxWidth = 1600
-    const maxHeight = 1200
+    const maxWidth = 1920
+    const maxHeight = 1080
     
     let width = originalWidth
     let height = originalHeight
@@ -122,22 +130,29 @@ export default function ImageCompressor({ file, onCompressed, onError }: ImageCo
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
+  const cancelCompression = () => {
+    compressionCancelled.current = true
+    setCompressing(false)
+  }
+
   if (!compressing) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-medium text-yellow-800">图片需要压缩</h3>
             <p className="text-sm text-yellow-700">
               当前大小：{formatFileSize(file.size)}，需要压缩到 5MB 以下
             </p>
           </div>
-          <button
-            onClick={compressImage}
-            className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
-          >
-            开始压缩
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={compressImage}
+              className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
+            >
+              开始压缩
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -145,19 +160,29 @@ export default function ImageCompressor({ file, onCompressed, onError }: ImageCo
 
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-3 mb-3">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-        <div className="flex-1">
-          <h3 className="text-sm font-medium text-blue-800">正在压缩图片...</h3>
-          <div className="w-full bg-blue-200 rounded-full h-2 mt-2">
-            <div 
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
-          <p className="text-xs text-blue-600 mt-1">{progress}%</p>
-        </div>
+        <h3 className="text-sm font-medium text-blue-800">正在压缩图片...</h3>
       </div>
+      
+      <div className="w-full bg-blue-200 rounded-full h-2.5 mb-2">
+        <div 
+          className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+          style={{ width: `${progress}%` }}
+        ></div>
+      </div>
+      
+      <div className="flex justify-between text-xs text-blue-600 mb-3">
+        <span>{formatFileSize(file.size)} → {formatFileSize(file.size * (1 - progress/100))}</span>
+        <span>{progress}%</span>
+      </div>
+      
+      <button
+        onClick={cancelCompression}
+        className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+      >
+        取消压缩
+      </button>
     </div>
   )
 }

@@ -5,5 +5,157 @@
 @layer base {
   html {
     font-family: system-ui, sans-serif;
+    scroll-behavior: smooth;
   }
+  
+  body {
+    @apply text-gray-900;
+  }
+  
+  /* Focus styles for accessibility */
+  button:focus-visible,
+  a:focus-visible {
+    @apply outline outline-2 outline-blue-500 outline-offset-2;
+  }
+  
+  /* High contrast mode */
+  body.high-contrast {
+    @apply bg-black text-white;
+  }
+  
+  body.high-contrast .bg-white {
+    @apply bg-black;
+  }
+  
+  body.high-contrast .text-gray-900 {
+    @apply text-white;
+  }
+  
+  body.high-contrast .text-gray-700 {
+    @apply text-white;
+  }
+  
+  body.high-contrast .text-gray-600 {
+    @apply text-gray-300;
+  }
+  
+  body.high-contrast .bg-gray-100 {
+    @apply bg-gray-900;
+  }
+  
+  body.high-contrast .bg-gray-50 {
+    @apply bg-gray-900;
+  }
+  
+  body.high-contrast .border-gray-200 {
+    @apply border-gray-700;
+  }
+  
+  body.high-contrast .border-gray-300 {
+    @apply border-gray-600;
+  }
+  
+  body.high-contrast .shadow-md {
+    @apply shadow-none border border-white;
+  }
+  
+  body.high-contrast .shadow-lg {
+    @apply shadow-none border border-white;
+  }
+  
+  /* Font size adjustments */
+  body.font-size-small {
+    @apply text-sm;
+  }
+  
+  body.font-size-large {
+    @apply text-lg;
+  }
+  
+  body.font-size-large h1 {
+    @apply text-4xl md:text-5xl;
+  }
+  
+  body.font-size-large h2 {
+    @apply text-2xl;
+  }
+  
+  body.font-size-large h3 {
+    @apply text-xl;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+@layer components {
+  /* Custom component classes */
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+  }
+  
+  .btn-primary {
+    @apply bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg;
+  }
+  
+  .btn-secondary {
+    @apply bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg;
+  }
+  
+  /* Score color utilities */
+  .score-excellent {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .score-good {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .score-poor {
+    @apply bg-red-100 text-red-800;
+  }
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

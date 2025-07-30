@@ -1,8 +1,13 @@
+// app/detection/page.tsx
 'use client'
 
-import { useState, useRef } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import ImageCompressor from '@/components/ImageCompressor'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { formatFileSize } from '@/lib/utils'
+import { useAccessibility } from '@/components/AccessibilityHelper'
 
 export default function DetectionPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -13,8 +18,10 @@ export default function DetectionPage() {
   const [compressionInfo, setCompressionInfo] = useState<string | null>(null)
   const [compressionProgress, setCompressionProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  const { highContrast } = useAccessibility()
 
   const handleFileSelect = async (file: File) => {
     setError(null)
@@ -92,14 +99,6 @@ export default function DetectionPage() {
   const handleCompressionError = (error: string) => {
     setError(error)
     setNeedsCompression(false)
-  }
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
   // 智能压缩参数预估
@@ -280,6 +279,29 @@ export default function DetectionPage() {
     }
   }
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      handleFileSelect(files[0])
+    }
+  }, [])
+
   const handleUpload = async () => {
     if (!selectedFile) return
 
@@ -341,11 +363,18 @@ export default function DetectionPage() {
             </p>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-6">
+          <Card>
             {!selectedFile ? (
               <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 cursor-pointer relative
+                  ${isDragging 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                  }`}
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 <div className="text-4xl mb-4">📷</div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -355,9 +384,9 @@ export default function DetectionPage() {
                   支持 JPEG、PNG、GIF、WebP 格式<br/>
                   <span className="text-blue-600">大于 5MB 的图片将自动压缩优化</span>
                 </p>
-                <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                <Button variant="primary">
                   选择文件
-                </button>
+                </Button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -365,45 +394,50 @@ export default function DetectionPage() {
                   onChange={handleFileInputChange}
                   className="hidden"
                 />
+                <p className="text-gray-500 text-sm mt-4">或将图片拖拽到此处</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {/* 自动压缩进度显示 */}
                 {needsCompression && originalFile && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                      <div className="flex-1">
-                        <h3 className="text-sm font-medium text-blue-800">正在自动压缩图片...</h3>
-                        <div className="w-full bg-blue-200 rounded-full h-2 mt-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${compressionProgress}%` }}
-                          ></div>
-                        </div>
-                        <p className="text-xs text-blue-600 mt-1">
-                          {compressionInfo || `原始大小：${formatFileSize(originalFile.size)}`} ({compressionProgress}%)
-                        </p>
-                      </div>
+                  <Card variant="filled">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <LoadingSpinner size="sm" />
+                      <h3 className="text-sm font-medium text-blue-800">正在自动压缩图片...</h3>
                     </div>
-                  </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2.5 mb-2">
+                      <div
+                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                        style={{ width: `${compressionProgress}%` }}
+                      ></div>
+                    </div>
+                    <div className="flex justify-between text-xs text-blue-600">
+                      <span>
+                        {compressionInfo || `原始大小：${formatFileSize(originalFile.size)}`}
+                      </span>
+                      <span>{compressionProgress}%</span>
+                    </div>
+                  </Card>
                 )}
 
-                <div className="relative">
-                  <img
-                    src={preview!}
-                    alt="预览"
-                    className="w-full max-h-64 object-contain rounded-lg"
-                  />
-                  <button
-                    onClick={resetFile}
-                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition-colors"
-                  >
-                    ×
-                  </button>
-                </div>
+                {preview && (
+                  <div className="relative">
+                    <img
+                      src={preview}
+                      alt="预览"
+                      className="w-full max-h-64 object-contain rounded-lg border"
+                    />
+                    <button
+                      onClick={resetFile}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition-colors shadow-md"
+                      aria-label="移除图片"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
                 
-                <div className="bg-gray-50 p-4 rounded-lg">
+                <Card variant="filled">
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="font-semibold text-gray-900">{selectedFile.name}</p>
@@ -416,34 +450,59 @@ export default function DetectionPage() {
                         </p>
                       )}
                     </div>
-                    <div className="text-green-500">✓</div>
+                    <div className="text-green-500 text-xl">✓</div>
                   </div>
-                </div>
+                </Card>
                 
-                <button
-                  onClick={handleUpload}
-                  disabled={uploading || needsCompression}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {uploading ? '正在分析...' : needsCompression ? '请先压缩图片' : '开始分析'}
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Button
+                    onClick={handleUpload}
+                    disabled={uploading || needsCompression}
+                    size="lg"
+                  >
+                    {uploading ? (
+                      <>
+                        <LoadingSpinner size="sm" className="mr-2" />
+                        正在分析...
+                      </>
+                    ) : needsCompression ? (
+                      <>
+                        <LoadingSpinner size="sm" className="mr-2" />
+                        压缩中...
+                      </>
+                    ) : (
+                      '开始分析'
+                    )}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={resetFile}
+                    size="lg"
+                  >
+                    重新选择
+                  </Button>
+                </div>
               </div>
             )}
-            
-            {error && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-600">{error}</p>
+          </Card>
+          
+          {error && (
+            <Card variant="outline" className="mt-4 border-red-200 bg-red-50">
+              <div className="flex items-center text-red-600">
+                <span className="text-xl mr-2">⚠️</span>
+                <span>{error}</span>
               </div>
-            )}
-          </div>
+            </Card>
+          )}
           
           <div className="text-center mt-8">
-            <a
-              href="/"
-              className="text-blue-600 hover:text-blue-700 transition-colors"
+            <button
+              onClick={() => router.push('/')}
+              className="text-blue-600 hover:text-blue-700 transition-colors font-medium"
             >
               ← 返回首页
-            </a>
+            </button>
           </div>
         </div>
       </div>

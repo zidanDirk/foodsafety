@@ -1,7 +1,12 @@
+// app/results/page.tsx
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { useAccessibility } from '@/components/AccessibilityHelper'
 
 interface TaskResult {
   taskId: string
@@ -33,7 +38,7 @@ interface TaskResult {
   error?: string
 }
 
-function ResultsPageContent() {
+export default function ResultsPage() {
   const [taskResult, setTaskResult] = useState<TaskResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,6 +46,7 @@ function ResultsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const taskId = searchParams?.get('taskId')
+  const { highContrast } = useAccessibility()
 
   useEffect(() => {
     if (!taskId) {
@@ -123,25 +129,34 @@ function ResultsPageContent() {
     return 'bg-red-100'
   }
 
+  const getHealthImpactColor = (impact: string) => {
+    switch (impact) {
+      case '对健康有益': return 'bg-green-100 text-green-700'
+      case '需要注意': return 'bg-yellow-100 text-yellow-700'
+      case '不健康': return 'bg-red-100 text-red-700'
+      default: return 'bg-gray-100 text-gray-700'
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <Card className="text-center max-w-md w-full">
+          <LoadingSpinner size="lg" className="mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">正在分析中...</h2>
           {taskResult && (
-            <div className="space-y-2">
+            <div className="space-y-4">
               <p className="text-gray-600">{taskResult.processingStep}</p>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
                   style={{ width: `${taskResult.progress}%` }}
                 ></div>
               </div>
               <p className="text-sm text-gray-500">{taskResult.progress}%</p>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     )
   }
@@ -149,17 +164,25 @@ function ResultsPageContent() {
   if (error || !taskResult) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+        <Card className="text-center max-w-md w-full">
           <div className="text-red-500 text-4xl mb-4">⚠️</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">分析失败</h2>
-          <p className="text-gray-600 mb-4">{error || '未知错误'}</p>
-          <button
-            onClick={() => router.push('/detection')}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            重新检测
-          </button>
-        </div>
+          <p className="text-gray-600 mb-6">{error || '未知错误'}</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button 
+              variant="primary" 
+              onClick={() => router.push('/detection')}
+            >
+              重新检测
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/')}
+            >
+              返回首页
+            </Button>
+          </div>
+        </Card>
       </div>
     )
   }
@@ -167,17 +190,25 @@ function ResultsPageContent() {
   if (taskResult.status === 'failed') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+        <Card className="text-center max-w-md w-full">
           <div className="text-red-500 text-4xl mb-4">❌</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">分析失败</h2>
-          <p className="text-gray-600 mb-4">{taskResult.error || '处理过程中出现错误'}</p>
-          <button
-            onClick={() => router.push('/detection')}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            重新检测
-          </button>
-        </div>
+          <p className="text-gray-600 mb-6">{taskResult.error || '处理过程中出现错误'}</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button 
+              variant="primary" 
+              onClick={() => router.push('/detection')}
+            >
+              重新检测
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/')}
+            >
+              返回首页
+            </Button>
+          </div>
+        </Card>
       </div>
     )
   }
@@ -185,68 +216,115 @@ function ResultsPageContent() {
   // 使用真实结果或降级到模拟结果
   const displayResult = taskResult.result || mockResult
 
+  // 计算健康度评分的圆环进度
+  const getScoreProgress = (score: number) => {
+    return (score / 10) * 100
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
               分析结果
             </h1>
-            <div className="flex items-center justify-center space-x-4">
-              <div className={`text-4xl font-bold ${getScoreColor(displayResult.healthAnalysis.overallScore)}`}>
-                {displayResult.healthAnalysis.overallScore}/10
-              </div>
-              <div className="text-gray-600">总体健康度评分</div>
-            </div>
+            <p className="text-gray-600">食品配料健康度评估报告</p>
           </div>
 
+          {/* 总体健康度评分 */}
+          <Card className="mb-8 text-center">
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative w-48 h-48 mb-6">
+                {/* 背景圆环 */}
+                <div className="absolute inset-0 rounded-full border-8 border-gray-200"></div>
+                {/* 进度圆环 */}
+                <div 
+                  className="absolute inset-0 rounded-full border-8 border-current transition-all duration-1000 ease-out"
+                  style={{ 
+                    borderColor: displayResult.healthAnalysis.overallScore >= 8 ? '#10B981' : 
+                                displayResult.healthAnalysis.overallScore >= 6 ? '#F59E0B' : '#EF4444',
+                    clipPath: `inset(0 ${100 - getScoreProgress(displayResult.healthAnalysis.overallScore)}% 0 0)`
+                  }}
+                ></div>
+                {/* 中心分数 */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <div className={`text-5xl font-bold ${
+                    displayResult.healthAnalysis.overallScore >= 8 ? 'text-green-600' :
+                    displayResult.healthAnalysis.overallScore >= 6 ? 'text-yellow-600' :
+                    'text-red-600'
+                  }`}>
+                    {displayResult.healthAnalysis.overallScore}
+                  </div>
+                  <div className="text-gray-500 text-sm mt-1">/10分</div>
+                </div>
+              </div>
+              
+              <div className={`text-2xl font-bold mb-2 ${
+                displayResult.healthAnalysis.overallScore >= 8 ? 'text-green-600' :
+                displayResult.healthAnalysis.overallScore >= 6 ? 'text-yellow-600' :
+                'text-red-600'
+              }`}>
+                {
+                  displayResult.healthAnalysis.overallScore >= 8 ? '健康' :
+                  displayResult.healthAnalysis.overallScore >= 6 ? '一般' :
+                  '需注意'
+                }
+              </div>
+              <p className="text-gray-600 max-w-md">
+                {displayResult.healthAnalysis.analysisReport}
+              </p>
+            </div>
+          </Card>
 
-
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">配料健康度评分</h2>
-            <div className="space-y-4">
+          {/* 配料健康度评分 */}
+          <Card className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">配料健康度评分</h2>
+            <div className="space-y-6">
               {displayResult.healthAnalysis.ingredientScores.map((item, index) => (
-                <div key={index} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-gray-900">{item.ingredient}</h3>
-                    <div className={`px-3 py-1 rounded-full text-sm font-semibold ${getScoreBackground(item.score)} ${getScoreColor(item.score)}`}>
-                      {item.score}/10
+                <div key={index} className="border rounded-lg p-5 hover:shadow-md transition-shadow">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4">
+                    <h3 className="font-semibold text-gray-900 text-xl mb-3 sm:mb-0">{item.ingredient}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <div className={`px-3 py-1 rounded-full text-sm font-semibold ${getScoreBackground(item.score)} ${getScoreColor(item.score)}`}>
+                        健康度: {item.score}/10
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getHealthImpactColor(item.healthImpact)}`}>
+                        {item.healthImpact}
+                      </span>
                     </div>
                   </div>
-                  <p className="text-gray-600 text-sm mb-1">{item.reason}</p>
-                  <div className="flex space-x-2 text-xs">
-                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded">{item.category}</span>
-                    <span className={`px-2 py-1 rounded ${
-                      item.healthImpact === '对健康有益' ? 'bg-green-100 text-green-700' :
-                      item.healthImpact === '需要注意' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {item.healthImpact}
-                    </span>
+                  <p className="text-gray-700 mb-4">{item.reason}</p>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <span className="bg-gray-100 px-2 py-1 rounded mr-2">{item.category}</span>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">分析报告</h2>
+          {/* 健康建议 */}
+          <Card className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">健康建议</h2>
+            <div className="prose max-w-none">
+              <p className="text-gray-700 whitespace-pre-line">{displayResult.healthAnalysis.recommendations}</p>
+            </div>
+          </Card>
+
+          {/* 分析报告 */}
+          <Card className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">详细分析报告</h2>
             <p className="text-gray-700">{displayResult.healthAnalysis.analysisReport}</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">健康建议</h2>
-            <p className="text-gray-700 whitespace-pre-line">{displayResult.healthAnalysis.recommendations}</p>
-          </div>
+          </Card>
 
           {/* 识别到的配料 - 收起展示 */}
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <Card className="mb-8">
             <button
               onClick={() => setShowIngredients(!showIngredients)}
               className="w-full flex items-center justify-between text-left hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+              aria-expanded={showIngredients}
             >
-              <h2 className="text-xl font-semibold text-gray-900">识别到的配料</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">识别到的配料</h2>
               <div className="flex items-center">
                 <span className="text-sm text-gray-500 mr-2">
                   {showIngredients ? '收起' : '展开查看'}
@@ -258,6 +336,7 @@ function ResultsPageContent() {
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -270,16 +349,19 @@ function ResultsPageContent() {
             </button>
 
             {showIngredients && (
-              <div className="mt-4 space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">OCR识别原文：</h3>
-                  <p className="text-gray-700 text-sm">{displayResult.ocrData.rawText}</p>
+              <div className="mt-6 space-y-6">
+                <div className="bg-gray-50 p-5 rounded-lg">
+                  <h3 className="text-lg font-medium text-gray-900 mb-3">OCR识别原文：</h3>
+                  <p className="text-gray-700">{displayResult.ocrData.rawText}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">提取的配料：</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">提取的配料：</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                     {displayResult.ocrData.extractedIngredients.ingredients.map((ingredient, index) => (
-                      <div key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                      <div 
+                        key={index} 
+                        className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-center font-medium"
+                      >
                         {ingredient.name}
                       </div>
                     ))}
@@ -287,39 +369,26 @@ function ResultsPageContent() {
                 </div>
               </div>
             )}
-          </div>
+          </Card>
 
-          <div className="text-center space-x-4">
-            <button
+          <div className="text-center space-y-4 sm:space-y-0 sm:space-x-4">
+            <Button 
+              variant="primary" 
+              size="lg"
               onClick={() => router.push('/detection')}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
             >
               检测新图片
-            </button>
-            <button
+            </Button>
+            <Button 
+              variant="outline" 
+              size="lg"
               onClick={() => router.push('/')}
-              className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors"
             >
               返回首页
-            </button>
+            </Button>
           </div>
         </div>
       </div>
     </div>
-  )
-}
-
-export default function ResultsPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-900">加载中...</h2>
-        </div>
-      </div>
-    }>
-      <ResultsPageContent />
-    </Suspense>
   )
 }
