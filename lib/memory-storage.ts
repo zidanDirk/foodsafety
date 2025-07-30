@@ -85,6 +85,11 @@ class MemoryStorage {
     
     return stats
   }
+  
+  // 清空所有任务
+  clear() {
+    this.tasks.clear()
+  }
 }
 
 // 导出单例实例
