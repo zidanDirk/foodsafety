@@ -6,6 +6,9 @@ import { generateTaskId } from '@/lib/utils'
 import { initializeDatabase } from '@/lib/database'
 import { validateConfig, logConfigStatus } from '@/lib/config'
 
+// Initialize WebSocket server if not already initialized
+import '@/pages/api/ws'
+
 // 禁用默认的 body parser，因为我们需要处理文件上传
 export const config = {
   api: {

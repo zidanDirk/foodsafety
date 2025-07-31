@@ -12,7 +12,7 @@ export interface ButtonProps
   fullWidth?: boolean
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+const ButtonComponent = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ 
     className, 
     variant = 'primary', 
@@ -84,6 +84,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     )
   }
 )
-Button.displayName = 'Button'
+ButtonComponent.displayName = 'Button'
+
+// Wrap with React.memo for performance optimization
+const Button = React.memo(ButtonComponent)
 
 export { Button }

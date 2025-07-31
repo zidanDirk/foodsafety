@@ -12,7 +12,7 @@ export interface CardProps
   hover?: boolean
 }
 
-const Card = React.forwardRef<HTMLDivElement, CardProps>(
+const CardComponent = React.forwardRef<HTMLDivElement, CardProps>(
   ({ 
     className, 
     variant = 'default',
@@ -59,6 +59,9 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     )
   }
 )
-Card.displayName = 'Card'
+CardComponent.displayName = 'Card'
+
+// Wrap with React.memo for performance optimization
+const Card = React.memo(CardComponent)
 
 export { Card }

@@ -3,6 +3,7 @@ import { DatabaseManager, Task } from './database'
 import { memoryStorage } from './memory-storage'
 import { OCRService } from './ocr-service'
 import { AIAnalysisService } from './ai-analysis-service'
+import { connections } from '@/pages/api/ws'
 
 // 检查是否使用数据库
 let useDatabase = false
@@ -74,24 +75,39 @@ export class TaskProcessor {
   // 更新任务状态
   static async updateTask(taskId: string, updates: Partial<Task>): Promise<Task | null> {
     try {
+      let task: Task | null = null
+      
       if (useDatabase) {
-        const task = await DatabaseManager.updateTask(taskId, updates)
+        task = await DatabaseManager.updateTask(taskId, updates)
         if (task) {
           console.log(`数据库 - 任务更新: ${taskId}, 状态: ${task.status}, 进度: ${task.progress}%`)
-          return task
         } else {
           // 降级到内存存储
           console.warn('数据库更新失败，尝试内存存储')
         }
       }
 
-      // 使用内存存储
-      return memoryStorage.updateTask(taskId, updates)
+      // 如果数据库更新失败或未使用数据库，使用内存存储
+      if (!task) {
+        task = memoryStorage.updateTask(taskId, updates)
+      }
+      
+      // 发送WebSocket更新
+      if (task) {
+        this.sendWebSocketUpdate(taskId, task)
+      }
+      
+      return task
     } catch (error) {
       console.error(`更新任务失败: ${taskId}`, error)
       // 降级到内存存储
       try {
-        return memoryStorage.updateTask(taskId, updates)
+        const task = memoryStorage.updateTask(taskId, updates)
+        // 发送WebSocket更新
+        if (task) {
+          this.sendWebSocketUpdate(taskId, task)
+        }
+        return task
       } catch (fallbackError) {
         console.error('内存存储更新也失败了:', fallbackError)
         return null
@@ -250,6 +266,27 @@ export class TaskProcessor {
     } catch (error) {
       console.error('获取任务统计失败:', error)
       return {}
+    }
+  }
+  
+  // 发送WebSocket更新
+  private static sendWebSocketUpdate(taskId: string, task: Task) {
+    try {
+      const connection = connections.get(taskId)
+      if (connection && connection.readyState === connection.OPEN) {
+        const update = {
+          type: 'taskUpdate',
+          taskId: task.id,
+          status: task.status,
+          progress: task.progress,
+          processingStep: task.processing_step,
+          updatedAt: task.updated_at
+        }
+        
+        connection.send(JSON.stringify(update))
+      }
+    } catch (error) {
+      console.error('发送WebSocket更新失败:', error)
     }
   }
 }

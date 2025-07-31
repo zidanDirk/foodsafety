@@ -55,29 +55,106 @@ function ResultsPageContent() {
       return
     }
 
-    const pollTaskStatus = async () => {
+    // Initialize WebSocket connection
+    let ws: WebSocket | null = null
+    let pollInterval: NodeJS.Timeout | null = null
+
+    const connectWebSocket = () => {
       try {
-        const response = await fetch(`/api/task-status?taskId=${taskId}`)
-
-        if (!response.ok) {
-          throw new Error('获取任务状态失败')
+        // Create WebSocket connection
+        const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/ws`
+        ws = new WebSocket(wsUrl)
+        
+        // Subscribe to task updates
+        ws.onopen = () => {
+          console.log('WebSocket connected')
+          ws?.send(JSON.stringify({ type: 'subscribe', taskId }))
         }
-
-        const result: TaskResult = await response.json()
-        setTaskResult(result)
-
-        if (result.status === 'completed' || result.status === 'failed') {
-          setLoading(false)
-        } else {
-          setTimeout(pollTaskStatus, 2000)
+        
+        // Handle incoming messages
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            if (data.type === 'taskUpdate' && data.taskId === taskId) {
+              // Update task result with real-time data
+              setTaskResult(prev => ({
+                ...prev,
+                ...data,
+                status: data.status,
+                progress: data.progress,
+                processingStep: data.processingStep
+              } as TaskResult))
+              
+              // Stop loading when task is completed or failed
+              if (data.status === 'completed' || data.status === 'failed') {
+                setLoading(false)
+                if (ws) {
+                  ws.close()
+                }
+              }
+            }
+          } catch (err) {
+            console.error('WebSocket message parsing error:', err)
+          }
+        }
+        
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error)
+          // Fallback to polling if WebSocket fails
+          startPolling()
+        }
+        
+        ws.onclose = () => {
+          console.log('WebSocket disconnected')
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : '获取结果失败')
-        setLoading(false)
+        console.error('WebSocket connection error:', err)
+        // Fallback to polling if WebSocket fails
+        startPolling()
       }
     }
+    
+    // Fallback polling mechanism
+    const startPolling = () => {
+      pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/task-status?taskId=${taskId}`)
+          
+          if (!response.ok) {
+            throw new Error('获取任务状态失败')
+          }
+          
+          const result: TaskResult = await response.json()
+          setTaskResult(result)
+          
+          if (result.status === 'completed' || result.status === 'failed') {
+            if (pollInterval) {
+              clearInterval(pollInterval)
+            }
+            setLoading(false)
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : '获取结果失败')
+          setLoading(false)
+          if (pollInterval) {
+            clearInterval(pollInterval)
+          }
+        }
+      }, 2000)
+    }
 
-    pollTaskStatus()
+    // Start with WebSocket connection
+    connectWebSocket()
+
+    // Cleanup function
+    return () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close()
+      }
+      if (pollInterval) {
+        clearInterval(pollInterval)
+      }
+    }
   }, [taskId])
 
   // 模拟分析结果（作为降级方案）

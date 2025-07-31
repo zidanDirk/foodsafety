@@ -11,6 +11,53 @@ export interface OCRResult {
   error?: string
 }
 
+// Simple LRU cache implementation
+class LRUCache<T> {
+  private cache: Map<string, { value: T; timestamp: number }>
+  private maxSize: number
+  private ttl: number // Time to live in milliseconds
+
+  constructor(maxSize: number = 100, ttl: number = 30 * 60 * 1000) { // 30 minutes default
+    this.cache = new Map()
+    this.maxSize = maxSize
+    this.ttl = ttl
+  }
+
+  get(key: string): T | undefined {
+    const item = this.cache.get(key)
+    if (!item) return undefined
+
+    // Check if item has expired
+    if (Date.now() - item.timestamp > this.ttl) {
+      this.cache.delete(key)
+      return undefined
+    }
+
+    // Move to front (most recently used)
+    this.cache.delete(key)
+    this.cache.set(key, { value: item.value, timestamp: item.timestamp })
+    return item.value
+  }
+
+  set(key: string, value: T): void {
+    // Remove oldest items if cache is full
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value
+      if (firstKey) this.cache.delete(firstKey)
+    }
+
+    // Add new item
+    this.cache.set(key, { value, timestamp: Date.now() })
+  }
+
+  clear(): void {
+    this.cache.clear()
+  }
+}
+
+// Create cache for OCR results
+const ocrCache = new LRUCache<OCRResult>(50, 30 * 60 * 1000) // 50 items, 30 minutes TTL
+
 export class OCRService {
   private static readonly BAIDU_TOKEN_URL = 'https://aip.baidubce.com/oauth/2.0/token'
   private static readonly BAIDU_OCR_URL = 'https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic'
@@ -233,12 +280,25 @@ export class OCRService {
   // 完整的OCR处理流程
   static async processImage(imageBase64: string): Promise<OCRResult> {
     try {
+      // Create cache key from image hash (simplified - in production you might want to use a proper hash)
+      const cacheKey = imageBase64.length > 100 ? imageBase64.substring(0, 50) + imageBase64.substring(imageBase64.length - 50) : imageBase64
+      
+      // Check cache first
+      const cachedResult = ocrCache.get(cacheKey)
+      if (cachedResult) {
+        console.log('返回缓存的OCR结果')
+        return cachedResult
+      }
+      
       const result = await this.extractTextFromBase64(imageBase64)
       console.log(`ocr res`, JSON.stringify(result, null, 2))
       
       if (!result.success) {
         throw new Error(result.error || 'OCR处理失败')
       }
+      
+      // Cache the result
+      ocrCache.set(cacheKey, result)
       
       return result
     } catch (error) {

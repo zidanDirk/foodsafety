@@ -11,7 +11,7 @@ export interface LoadingSpinnerProps
   className?: string
 }
 
-const LoadingSpinner = React.forwardRef<HTMLDivElement, LoadingSpinnerProps>(
+const LoadingSpinnerComponent = React.forwardRef<HTMLDivElement, LoadingSpinnerProps>(
   ({ 
     className, 
     variant = 'primary',
@@ -50,6 +50,9 @@ const LoadingSpinner = React.forwardRef<HTMLDivElement, LoadingSpinnerProps>(
     )
   }
 )
-LoadingSpinner.displayName = 'LoadingSpinner'
+LoadingSpinnerComponent.displayName = 'LoadingSpinner'
+
+// Wrap with React.memo for performance optimization
+const LoadingSpinner = React.memo(LoadingSpinnerComponent)
 
 export { LoadingSpinner }

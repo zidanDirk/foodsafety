@@ -20,6 +20,53 @@ export interface AIAnalysisResult {
   error?: string
 }
 
+// Simple LRU cache implementation for AI analysis results
+class LRUCache<T> {
+  private cache: Map<string, { value: T; timestamp: number }>
+  private maxSize: number
+  private ttl: number // Time to live in milliseconds
+
+  constructor(maxSize: number = 100, ttl: number = 60 * 60 * 1000) { // 60 minutes default
+    this.cache = new Map()
+    this.maxSize = maxSize
+    this.ttl = ttl
+  }
+
+  get(key: string): T | undefined {
+    const item = this.cache.get(key)
+    if (!item) return undefined
+
+    // Check if item has expired
+    if (Date.now() - item.timestamp > this.ttl) {
+      this.cache.delete(key)
+      return undefined
+    }
+
+    // Move to front (most recently used)
+    this.cache.delete(key)
+    this.cache.set(key, { value: item.value, timestamp: item.timestamp })
+    return item.value
+  }
+
+  set(key: string, value: T): void {
+    // Remove oldest items if cache is full
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value
+      if (firstKey) this.cache.delete(firstKey)
+    }
+
+    // Add new item
+    this.cache.set(key, { value, timestamp: Date.now() })
+  }
+
+  clear(): void {
+    this.cache.clear()
+  }
+}
+
+// Create cache for AI analysis results
+const aiCache = new LRUCache<AIAnalysisResult>(30, 60 * 60 * 1000) // 30 items, 60 minutes TTL
+
 export class AIAnalysisService {
   private static readonly DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
   private static readonly MODEL_NAME = 'deepseek-chat'
@@ -27,13 +74,26 @@ export class AIAnalysisService {
   // 分析配料健康度 - 从OCR原始文本中提取并分析配料
   static async analyzeIngredients(rawText: string): Promise<AIAnalysisResult> {
     try {
+      // Create cache key from text content (simplified - in production you might want to use a proper hash)
+      const cacheKey = rawText.length > 100 ? rawText.substring(0, 50) + rawText.substring(rawText.length - 50) : rawText
+      
+      // Check cache first
+      const cachedResult = aiCache.get(cacheKey)
+      if (cachedResult) {
+        console.log('返回缓存的AI分析结果')
+        return cachedResult
+      }
+      
       // 如果没有配置API密钥，使用模拟数据
       if (!process.env.DEEPSEEK_API_KEY) {
         console.log('DeepSeek API未配置，使用模拟数据')
-        return {
+        const result = {
           success: true,
           data: this.generateMockAnalysisFromText(rawText)
         }
+        // Cache the result
+        aiCache.set(cacheKey, result)
+        return result
       }
 
       const prompt = this.buildAnalysisPromptFromText(rawText)
@@ -46,20 +106,29 @@ export class AIAnalysisService {
       }
 
       const analysisData = this.parseAIResponseFromText(response.data || '')
-      
-      return {
+      const result = {
         success: true,
         data: analysisData
       }
+      
+      // Cache the result
+      aiCache.set(cacheKey, result)
+      
+      return result
 
     } catch (error) {
       console.error('AI健康度分析失败:', error)
       console.log('使用模拟数据作为降级方案')
 
-      return {
+      const result = {
         success: true,
         data: this.generateMockAnalysisFromText(rawText)
       }
+      
+      // Cache the result
+      aiCache.set(rawText, result)
+      
+      return result
     }
   }
 
