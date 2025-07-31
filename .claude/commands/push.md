@@ -1,1 +1,1 @@
-使用 470336897@qq.com 账号执行 git push 至远端 master 分支
+通过 github-server MCP server 使用 470336897@qq.com 账号将代码推送到远程 master 分支

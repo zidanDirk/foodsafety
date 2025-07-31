@@ -1,1 +1,1 @@
-使用 470336897@qq.com 账号生成 git commit 记录
+通过 github-server MCP server 使用 470336897@qq.com 账号创建 git commit 记录
